@@ -31,3 +31,11 @@ val mk_post_checks :
   Tterm.term list ->
   expression ->
   expression
+
+val mk_invariant_checks :
+  state:expression ->
+  typ:string ->
+  register_name:expression ->
+  term_printer:(Tterm.term -> string) ->
+  Tterm.term list ->
+  expression

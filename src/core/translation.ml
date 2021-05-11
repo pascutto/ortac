@@ -71,12 +71,20 @@ and bounds (var : Tterm.vsymbol) (t : Tterm.term) :
       | exception Unsupported _ -> None)
   | _ -> None
 
-and term (t : Tterm.term) : expression =
+and term ?typ (t : Tterm.term) : expression =
+  let term = term ?typ in
   let unsupported m = raise (Unsupported (t.t_loc, m)) in
   match t.t_node with
   | Tvar { vs_name; _ } -> evar (str "%a" Identifier.Ident.pp vs_name)
   | Tconst c -> econst c
   | Tfield (t, f) -> pexp_field (term t) (lident f.ls_name.id_str)
+  | Tapp (fs, []) when fs.ls_field -> (
+      match typ with
+      | Some t -> pexp_field (evar t) (lident fs.ls_name.id_str)
+      | None ->
+          Fmt.failwith
+            "no type variable was provided in type field translation: `%s'"
+            fs.ls_name.id_str)
   | Tapp (fs, []) when Tterm.(ls_equal fs fs_bool_true) -> [%expr true]
   | Tapp (fs, []) when Tterm.(ls_equal fs fs_bool_false) -> [%expr false]
   | Tapp (fs, tlist) when Tterm.is_fs_tuple fs ->
@@ -153,9 +161,9 @@ and term (t : Tterm.term) : expression =
   | Ttrue -> [%expr true]
   | Tfalse -> [%expr false]
 
-let term fail t =
+let term ?typ fail t =
   [%expr
-    try [%e term t]
+    try [%e term ?typ t]
     with e ->
       [%e fail (evar "e")];
       true]
@@ -177,6 +185,20 @@ let pre ~register_name ~term_printer =
   let fail_violated term = F.violated `Pre ~term ~register_name in
   let fail_nonexec term exn = F.spec_failure `Pre ~term ~exn ~register_name in
   conditions ~term_printer fail_violated fail_nonexec
+
+let invariant ~state ~typ ~register_name ~term_printer terms =
+  let fail_violated term =
+    F.violated_invariant ~state ~typ ~term ~register_name
+  in
+  let fail_nonexec term exn =
+    F.spec_failure `Invariant ~term ~exn ~register_name
+  in
+  List.map
+    (fun t ->
+      let s = term_printer t in
+      [%expr if not [%e term ~typ (fail_nonexec s) t] then [%e fail_violated s]])
+    terms
+  |> esequence
 
 let rec xpost_pattern exn = function
   | Tterm.Pwild -> ppat_construct (lident exn) (Some ppat_any)
@@ -312,3 +334,6 @@ let mk_post_checks ~register_name ~term_printer posts next =
     [%e post ~register_name ~term_printer posts];
     [%e F.report ~register_name];
     [%e next]]
+
+let mk_invariant_checks ~state ~typ ~register_name ~term_printer invariants =
+  invariant ~state ~typ ~register_name ~term_printer invariants

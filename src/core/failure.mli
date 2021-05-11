@@ -1,5 +1,12 @@
 open Ppxlib
 
+val violated_invariant :
+  state:expression ->
+  typ:string ->
+  term:string ->
+  register_name:expression ->
+  expression
+
 val violated :
   [ `Post | `Pre | `XPost ] ->
   term:string ->
@@ -7,7 +14,7 @@ val violated :
   expression
 
 val spec_failure :
-  [ `Post | `Pre | `XPost ] ->
+  [ `Invariant | `Post | `Pre | `XPost ] ->
   term:string ->
   exn:expression ->
   register_name:expression ->
