@@ -22,6 +22,9 @@ val mk_call :
   label ->
   (Ttypes.xsymbol * (Tterm.pattern * Tterm.term) list) list ->
   (arg_label * expression) list ->
+  (expression -> expression) ->
+  (negative:bool -> Parsetree.expression -> Parsetree.expression) ->
+  bool ->
   expression ->
   expression
 
@@ -38,4 +41,21 @@ val mk_invariant_checks :
   register_name:expression ->
   term_printer:(Tterm.term -> string) ->
   Tterm.term list ->
+  expression
+
+val mk_checks_decl :
+  names:string list ->
+  register_name:expression ->
+  term_printer:(Tterm.term -> string) ->
+  Tterm.term list ->
+  expression ->
+  expression
+
+val mk_checks_checks :
+  negative:bool ->
+  names:string list ->
+  register_name:expression ->
+  term_printer:(Tterm.term -> string) ->
+  Tterm.term list ->
+  expression ->
   expression

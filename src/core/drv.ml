@@ -3,6 +3,7 @@ let t =
   List.iter
     (fun (gospel, ocaml) -> Hashtbl.add t gospel ocaml)
     [
+      ("infix ==", "(==)");
       ("infix +", "Z.add");
       ("infix -", "Z.sub");
       ("infix *", "Z.mul");

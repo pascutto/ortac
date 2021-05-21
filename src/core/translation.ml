@@ -21,7 +21,8 @@ let rec pattern p =
   | Tterm.Pas (p, v) ->
       ppat_alias (pattern p) (noloc (str "%a" Identifier.Ident.pp v.vs_name))
 
-let rec array_no_coercion (ls : Tterm.lsymbol) (tlist : Tterm.term list) =
+let rec array_no_coercion ?typ (ls : Tterm.lsymbol) (tlist : Tterm.term list) =
+  let term = term ?typ in
   (match ls.ls_name.id_str with
   | "mixfix [_]" -> Some "Array.get"
   | "length" -> Some "Array.length"
@@ -33,8 +34,9 @@ let rec array_no_coercion (ls : Tterm.lsymbol) (tlist : Tterm.term list) =
          | _ -> None)
   |> Option.join
 
-and bounds (var : Tterm.vsymbol) (t : Tterm.term) :
+and bounds ?typ (var : Tterm.vsymbol) (t : Tterm.term) :
     (expression * expression) option =
+  let term = term ?typ in
   (* [comb] extracts a bound from an the operator [f] and expression [e].
      [right] indicates if [e] is on the right side of the operator. *)
   let comb ~right (f : Tterm.lsymbol) e =
@@ -90,7 +92,7 @@ and term ?typ (t : Tterm.term) : expression =
   | Tapp (fs, tlist) when Tterm.is_fs_tuple fs ->
       List.map term tlist |> pexp_tuple
   | Tapp (ls, tlist) -> (
-      match array_no_coercion ls tlist with
+      match array_no_coercion ?typ ls tlist with
       | Some e -> e
       | None -> (
           let func = ls.ls_name.id_str in
@@ -124,7 +126,7 @@ and term ?typ (t : Tterm.term) : expression =
           in
           match t.t_node with
           | Tbinop (op, t1, t2) when gospel_op op -> (
-              bounds var t1 |> function
+              bounds ?typ var t1 |> function
               | None -> unsupported "forall/exists"
               | Some (start, stop) ->
                   let t2 = term t2 in
@@ -214,25 +216,42 @@ let rec xpost_pattern exn = function
         (xpost_pattern exn p.p_node)
         (noloc (str "%a" Tterm.Ident.pp s.vs_name))
 
-let xpost_guard ~register_name ~term_printer xpost call =
+let xpost_guard ~register_name ~term_printer xpost call input_invariants
+    check_checks checks =
   let module M = Map.Make (struct
     type t = Ttypes.xsymbol
 
     let compare = compare
   end) in
   let default_cases =
-    [
+    let d =
+      [
+        case ~guard:None
+          ~lhs:[%pat? (Stack_overflow | Out_of_memory) as e]
+          ~rhs:
+            [%expr
+              [%e
+                check_checks ~negative:false
+                @@ input_invariants @@ F.report ~register_name];
+              raise e];
+        case ~guard:None
+          ~lhs:[%pat? e]
+          ~rhs:
+            [%expr
+              [%e
+                F.unexpected_exn ~allowed_exn:[] ~exn:(evar "e") ~register_name];
+              [%e
+                check_checks ~negative:false
+                @@ input_invariants @@ F.report ~register_name];
+              raise e];
+      ]
+    in
+    if checks then
       case ~guard:None
-        ~lhs:[%pat? (Stack_overflow | Out_of_memory) as e]
-        ~rhs:[%expr raise e];
-      case ~guard:None
-        ~lhs:[%pat? e]
-        ~rhs:
-          [%expr
-            [%e F.unexpected_exn ~allowed_exn:[] ~exn:(evar "e") ~register_name];
-            [%e F.report ~register_name];
-            raise e];
-    ]
+        ~lhs:[%pat? Invalid_argument _ as e]
+        ~rhs:(check_checks ~negative:true @@ eapply (evar "raise") [ evar "e" ])
+      :: d
+    else d
   in
   let assert_false_case =
     case ~guard:None ~lhs:[%pat? _] ~rhs:[%expr assert false]
@@ -267,10 +286,11 @@ let xpost_guard ~register_name ~term_printer xpost call =
       let has_args = exn.Ttypes.xs_type <> Ttypes.Exn_tuple [] in
       let alias = gen_symbol ~prefix:"__e" () in
       let rhs =
-        [%expr
-          [%e List.map (pexp_match (evar alias)) cases |> esequence];
-          [%e F.report ~register_name];
-          raise [%e evar alias]]
+        input_invariants
+        @@ [%expr
+             [%e List.map (pexp_match (evar alias)) cases |> esequence];
+             [%e F.report ~register_name];
+             raise [%e evar alias]]
       in
       let lhs =
         ppat_alias
@@ -321,9 +341,13 @@ let mk_pre_checks ~register_name ~term_printer pres next =
     [%e F.report ~register_name];
     [%e next]]
 
-let mk_call ~register_name ~term_printer ret_pat loc fun_name xpost eargs =
+let mk_call ~register_name ~term_printer ret_pat loc fun_name xpost eargs
+    input_invariants check_checks checks =
   let call = pexp_apply (evar fun_name) eargs in
-  let check_raises = xpost_guard ~register_name ~term_printer xpost call in
+  let check_raises =
+    xpost_guard ~register_name ~term_printer xpost call input_invariants
+      check_checks checks
+  in
   fun next ->
     [%expr
       let [%p ret_pat] = [%e check_raises] in
@@ -337,3 +361,35 @@ let mk_post_checks ~register_name ~term_printer posts next =
 
 let mk_invariant_checks ~state ~typ ~register_name ~term_printer invariants =
   invariant ~state ~typ ~register_name ~term_printer invariants
+
+let mk_checks_decl ~names ~register_name ~term_printer checks =
+  let fail_nonexec term exn = F.spec_failure `Pre ~term ~exn ~register_name in
+  fun next ->
+    List.fold_left2
+      (fun next check name ->
+        let s = term_printer check in
+        [%expr
+          let [%p pvar name] = [%e term (fail_nonexec s) check] in
+          [%e next]])
+      next checks names
+
+let mk_checks_checks ~negative ~names ~register_name ~term_printer checks =
+  let fail_violated term = F.uncaught_checks ~register_name ~term in
+  let fail_unexpected =
+    F.unexpected_checks ~register_name ~terms:(List.map term_printer checks)
+  in
+  let checks_exprs =
+    List.map2
+      (fun name check ->
+        let s = term_printer check in
+        [%expr
+          if [%e if negative then evar name else enot (evar name)] then
+            [%e if negative then fail_unexpected else fail_violated s]])
+      names checks
+    |> esequence
+  in
+  fun next ->
+    [%expr
+      [%e checks_exprs];
+      [%e F.report ~register_name];
+      [%e next]]

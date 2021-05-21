@@ -33,5 +33,5 @@ depends: [
   "ortac-runtime" {with-test}
 ]
 pin-depends: [
-  [ "gospel.dev" "git+https://github.com/ocaml-gospel/gospel#4170f412dba0911422b10644a46590432f119417" ]
+  [ "gospel.dev" "git+https://github.com/pascutto/gospel#4170f412dba0911422b10644a46590432f119417" ]
 ]

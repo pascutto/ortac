@@ -4,6 +4,8 @@ include Ast_builder.S
 
 val noloc : 'a -> 'a loc
 
+val enot : expression -> expression
+
 val epred : expression -> expression
 
 val esucc : expression -> expression

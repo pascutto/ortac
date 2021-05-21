@@ -6,6 +6,8 @@ end)
 
 let noloc txt = { txt; loc = Location.none }
 
+let enot e = eapply (evar "not") [ e ]
+
 let epred e = eapply (evar "Z.pred") [ e ]
 
 let esucc e = eapply (evar "Z.succ") [ e ]

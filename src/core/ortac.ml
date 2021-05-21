@@ -37,61 +37,6 @@ module Make (B : Backend.S) = struct
         | Tast.Lghost _ -> (eargs, pargs, targs))
       args ([], [], [])
 
-  let value (val_desc : Tast.val_description) =
-    let process (spec : Tast.val_spec) =
-      let term_printer (t : Tterm.term) =
-        match t.t_loc with
-        | None -> Fmt.str "%a" Tterm.print_term t
-        | Some loc ->
-            String.sub spec.sp_text loc.loc_start.pos_cnum
-              (loc.loc_end.pos_cnum - loc.loc_start.pos_cnum)
-      in
-      let loc = val_desc.vd_loc in
-      if List.length spec.sp_args = 0 then
-        raise (T.Unsupported (Some loc, "non-function value"));
-      let setup_expr, register_name = T.mk_setup loc val_desc.vd_name.id_str in
-      let register_name = evar register_name in
-      let eargs, pargs, targs = of_gospel_args spec.sp_args in
-      let ret_pat, ret_expr = T.returned_pattern spec.sp_ret in
-      let input_invariants_checks next =
-        let ts_of_ty ty =
-          match ty.Ttypes.ty_node with
-          | Ttypes.Tyvar _ -> None
-          | Tyapp (ts, _) -> Some ts
-        in
-        let rec loop e t =
-          match (e, t) with
-          | [], [] -> next
-          | (_, eh) :: et, th :: tt ->
-              Option.bind (ts_of_ty th) (Hashtbl.find_opt type_invariants)
-              |> Option.map (fun check_function ->
-                     let check =
-                       eapply check_function [ register_name; evar "Pre"; eh ]
-                     in
-                     pexp_sequence check (loop et tt))
-              |> Option.value ~default:(loop et tt)
-          | _, _ -> assert false
-        in
-        loop eargs targs
-      in
-      let pre_checks =
-        T.mk_pre_checks ~register_name ~term_printer spec.sp_pre
-      in
-      let let_call =
-        T.mk_call ~register_name ~term_printer ret_pat loc
-          val_desc.vd_name.id_str spec.sp_xpost eargs
-      in
-      let post_checks =
-        T.mk_post_checks ~register_name ~term_printer spec.sp_post
-      in
-      let body =
-        efun pargs @@ setup_expr @@ input_invariants_checks @@ pre_checks
-        @@ let_call @@ post_checks @@ ret_expr
-      in
-      [%stri let [%p pvar val_desc.vd_name.id_str] = [%e body]]
-    in
-    Option.map process val_desc.vd_spec
-
   let typ (t : Tast.type_declaration) =
     let process (spec : Tast.type_spec) =
       if spec.ty_fields <> [] then
@@ -109,13 +54,91 @@ module Make (B : Backend.S) = struct
         T.mk_invariant_checks ~state:(evar state) ~typ
           ~register_name:(evar register_name) ~term_printer spec.ty_invariants
       in
-      Hashtbl.replace type_invariants t.td_ts (evar check_name);
+      Hashtbl.add type_invariants t.td_ts (evar check_name);
       [%stri
         let [%p pvar check_name] =
          fun [%p pvar register_name] [%p pvar state] [%p pvar typ] -> [%e body]]
     in
     Option.bind t.td_spec (fun s ->
         if s.ty_invariants = [] then None else Some (process s))
+
+  let ts_of_ty ty =
+    match ty.Ttypes.ty_node with
+    | Ttypes.Tyvar _ -> None
+    | Tyapp (ts, _) -> Some ts
+
+  let value (val_desc : Tast.val_description) =
+    let process (spec : Tast.val_spec) =
+      let term_printer (t : Tterm.term) =
+        match t.t_loc with
+        | None -> Fmt.str "%a" Tterm.print_term t
+        | Some loc ->
+            String.sub spec.sp_text loc.loc_start.pos_cnum
+              (loc.loc_end.pos_cnum - loc.loc_start.pos_cnum)
+      in
+      let loc = val_desc.vd_loc in
+      if List.length spec.sp_args = 0 then
+        raise (T.Unsupported (Some loc, "non-function value"));
+      let setup_expr, register_name = T.mk_setup loc val_desc.vd_name.id_str in
+      let register_name = evar register_name in
+      let eargs, pargs, targs = of_gospel_args spec.sp_args in
+      let ret_pat, ret_expr = T.returned_pattern spec.sp_ret in
+      let input_invariants_checks state next =
+        List.map2
+          (fun (_, eh) th ->
+            match ts_of_ty th with
+            | None -> eunit
+            | Some ts ->
+                Hashtbl.find_all type_invariants ts
+                |> List.map (fun check_function ->
+                       eapply check_function [ register_name; evar state; eh ])
+                |> esequence)
+          eargs targs
+        |> esequence
+        |> fun e -> pexp_sequence e next
+      in
+      let output_invariants_checks next =
+        match ts_of_ty spec.sp_ret_typ with
+        | None -> next
+        | Some ts ->
+            Hashtbl.find_all type_invariants ts
+            |> List.map (fun check_function ->
+                   eapply check_function
+                     [ register_name; evar "Post"; ret_expr ])
+            |> esequence
+            |> fun e -> pexp_sequence e next
+      in
+      let checks_names =
+        List.init (List.length spec.sp_checks) (fun _ ->
+            gen_symbol ~prefix:"__checks" ())
+      in
+      let checks_decls =
+        T.mk_checks_decl ~names:checks_names ~register_name ~term_printer
+          spec.sp_checks
+      in
+      let checks_checks ~negative =
+        T.mk_checks_checks ~negative ~names:checks_names ~register_name
+          ~term_printer spec.sp_checks
+      in
+      let pres = T.mk_pre_checks ~register_name ~term_printer spec.sp_pre in
+      let let_call =
+        T.mk_call ~register_name ~term_printer ret_pat loc
+          val_desc.vd_name.id_str spec.sp_xpost eargs
+          (input_invariants_checks "XPost")
+          checks_checks (spec.sp_checks <> [])
+      in
+      let posts = T.mk_post_checks ~register_name ~term_printer spec.sp_post in
+      let body =
+        efun pargs @@ setup_expr
+        @@ input_invariants_checks "Pre"
+        @@ pres @@ checks_decls @@ let_call @@ output_invariants_checks
+        @@ input_invariants_checks "Post"
+        @@ checks_checks ~negative:false
+        @@ posts @@ ret_expr
+      in
+      [%stri let [%p pvar val_desc.vd_name.id_str] = [%e body]]
+    in
+    Option.map process val_desc.vd_spec
 
   let signature module_name s =
     let declarations =
