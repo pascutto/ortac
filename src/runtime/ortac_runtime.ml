@@ -127,7 +127,7 @@ module Errors = struct
     match t.errors with
     | [] -> ()
     | _ ->
-        pp_error_report stderr t;
+        Fmt.epr "%a@." pp_error_report t;
         raise (Error t)
 end
 

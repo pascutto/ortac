@@ -9,11 +9,15 @@ let backend_parser = function
   | "monolith" -> Ok Monolith
   | s -> Error (`Msg (Printf.sprintf "Error: `%s' is not a valid argument" s))
 
-let main = function
+let main () = function
   | Default -> Ortac.Backend.generate
   | Monolith -> Ortac_monolith.Backend.generate
 
 open Cmdliner
+
+let setup_fmt =
+  let init style_renderer = Fmt_tty.setup_std_outputs ?style_renderer () in
+  Term.(const init $ Fmt_cli.style_renderer ())
 
 let ocaml_file =
   let parse s =
@@ -37,6 +41,6 @@ let backend =
 
 let cmd =
   let doc = "Run ORTAC." in
-  (Term.(const main $ backend $ ocaml_file), Term.info "ortac" ~doc)
+  (Term.(const main $ setup_fmt $ backend $ ocaml_file), Term.info "ortac" ~doc)
 
 let () = Term.(exit @@ eval cmd)
