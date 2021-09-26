@@ -1,7 +1,8 @@
 open Ppxlib
 open Gospel
 
-val returned_pattern : Tast.lb_arg list -> pattern * expression
+val returned_pattern :
+  Tast.lb_arg list -> (pattern * expression * Ttypes.ty) list
 
 val mk_setup : location -> string -> (expression -> expression) * string
 

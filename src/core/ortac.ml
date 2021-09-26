@@ -60,7 +60,9 @@ module Make (B : Backend.S) = struct
       (* Arguments *)
       let eargs, pargs, targs = of_gospel_args spec.sp_args in
       (* Returned pattern *)
-      let ret_pat, ret_expr = T.returned_pattern spec.sp_ret in
+      let rets = T.returned_pattern spec.sp_ret in
+      let ret_pat = List.map (fun (p, _, _) -> p) rets |> ppat_tuple in
+      let ret_expr = List.map (fun (_, e, _) -> e) rets |> pexp_tuple in
       let all_terms =
         spec.sp_post @ spec.sp_pre
         @ List.fold_left
@@ -82,6 +84,21 @@ module Make (B : Backend.S) = struct
         |> esequence
         |> fun e -> pexp_sequence e next
       in
+      let output_invariants_checks next =
+        List.map
+          (fun (_, e, t) ->
+            match ts_of_ty t with
+            | None -> eunit
+            | Some ts ->
+                Hashtbl.find_all invariants_table ts
+                |> List.map (fun check_function ->
+                       eapply check_function [ register_name; evar "Post"; e ])
+                |> esequence)
+          rets
+        |> esequence
+        |> fun e -> pexp_sequence e next
+      in
+
       let pre_checks =
         T.mk_pre_checks ~driver ~olds ~register_name ~term_printer spec.sp_pre
       in
@@ -97,6 +114,7 @@ module Make (B : Backend.S) = struct
         @@ input_invariants_checks "Pre"
         @@ pre_checks @@ let_call
         @@ input_invariants_checks "Post"
+        @@ output_invariants_checks
         @@ post_checks @@ ret_expr
       in
       [%stri let [%p pvar vd.vd_name.id_str] = [%e body]]

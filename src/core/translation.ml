@@ -269,19 +269,15 @@ let xpost_guard ~driver ~olds ~register_name ~term_printer xpost call =
 
 let returned_pattern rets =
   let to_string x = str "%a" Tast.Ident.pp x.Tterm.vs_name in
-  let pvars, evars =
-    List.filter_map
-      (function
-        | Tast.Lunit -> Some (punit, eunit)
-        | Tast.Lnone x ->
-            let s = to_string x in
-            Some (pvar s, evar s)
-        | Tast.Lghost _ -> None
-        | Tast.Loptional _ | Tast.Lnamed _ -> assert false)
-      rets
-    |> List.split
-  in
-  (ppat_tuple pvars, pexp_tuple evars)
+  List.filter_map
+    (function
+      | Tast.Lunit -> Some (punit, eunit, Ttypes.ty_unit)
+      | Tast.Lnone vs ->
+          let s = to_string vs in
+          Some (pvar s, evar s, vs.vs_ty)
+      | Tast.Lghost _ -> None
+      | Tast.Loptional _ | Tast.Lnamed _ -> assert false)
+    rets
 
 let mk_setup loc fun_name =
   let loc_name = gen_symbol ~prefix:"__loc" () in
