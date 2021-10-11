@@ -21,8 +21,17 @@ type type_ = {
   copy : (expression, W.t) result;
 }
 
-let type_ ~name ~loc ~mutable_ ~ghost equality comparison copy =
-  { name; loc; mutable_; ghost; invariants = []; equality; comparison; copy }
+let type_ ~name ~loc ~mutable_ ~ghost =
+  {
+    name;
+    loc;
+    mutable_;
+    ghost;
+    invariants = [];
+    equality = Error (W.Unsupported "equality", loc);
+    comparison = Error (W.Unsupported "comparison", loc);
+    copy = Error (W.Unsupported "copy", loc);
+  }
 
 type xpost = { exn : string; translation : (cases, W.t list) result }
 

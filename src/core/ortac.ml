@@ -34,9 +34,19 @@ module Make (B : Frontend.S) = struct
   let type_ ~driver ~ghost (td : Tast.type_declaration) =
     let name = td.td_ts.ts_ident.id_str in
     let loc = td.td_loc in
-    let mutable_ = false (* TODO *) in
+    let mutable_ = assert false (* infer if the type is mutable or not *) in
     let type_ = type_ ~name ~loc ~mutable_ ~ghost in
-    ()
+    let process ~type_ (spec : Tast.type_spec) =
+      (* let term_printer = Fmt.str "%a" Tterm.print_term in *)
+      let mutable_ = type_.mutable_ || spec.ty_ephemeral in
+      let type_ =
+        type_
+        |> T.with_models ~driver spec.ty_fields
+        |> T.with_invariants ~driver spec.ty_invariants
+      in
+      { type_ with mutable_ }
+    in
+    Option.fold ~none:type_ ~some:(process ~type_) td.td_spec
 
   let value ~driver ~ghost (vd : Tast.val_description) =
     let name = vd.vd_name.id_str in
@@ -58,8 +68,7 @@ module Make (B : Frontend.S) = struct
       in
       { value with pure = spec.sp_pure }
     in
-    if ghost then value
-    else Option.fold ~none:value ~some:(process ~value) vd.vd_spec
+    Option.fold ~none:value ~some:(process ~value) vd.vd_spec
 
   let constant ~driver ~ghost (vd : Tast.val_description) =
     let name = vd.vd_name.id_str in
@@ -74,8 +83,7 @@ module Make (B : Frontend.S) = struct
       let term_printer = term_printer spec.sp_text spec.sp_loc in
       constant |> T.with_constant_checks ~driver ~term_printer spec.sp_post
     in
-    if ghost then constant
-    else Option.fold ~none:constant ~some:(process ~constant) vd.vd_spec
+    Option.fold ~none:constant ~some:(process ~constant) vd.vd_spec
 
   let function_ ~driver (func : Tast.function_) : Translated.function_ =
     let name = func.fun_ls.ls_name.id_str in
