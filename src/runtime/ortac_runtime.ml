@@ -163,7 +163,14 @@ module Array = struct
     Array.iteri add arr;
     table
 
-  let permut_sub a b lo hi = occurrences a lo hi = occurrences b lo hi
+  let permut_sub a b lo hi =
+    let occ_a = occurrences a lo hi in
+    let occ_b = occurrences b lo hi in
+    let same_occ occ k v b =
+      match Hashtbl.find_opt occ k with None -> false | Some n -> v = n && b
+    in
+    Hashtbl.fold (same_occ occ_b) occ_a true
+    && Hashtbl.fold (same_occ occ_a) occ_b true
 
   let permut a b =
     if Array.length a <> Array.length b then false
