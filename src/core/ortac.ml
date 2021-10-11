@@ -31,6 +31,13 @@ module Make (B : Frontend.S) = struct
     let invariants = assert false (* use the driver to find invariants *) in
     { name; type_; invariants }
 
+  let type_ ~driver ~ghost (td : Tast.type_declaration) =
+    let name = td.td_ts.ts_ident.id_str in
+    let loc = td.td_loc in
+    let mutable_ = false (* TODO *) in
+    let type_ = type_ ~name ~loc ~mutable_ ~ghost in
+    ()
+
   let value ~driver ~ghost (vd : Tast.val_description) =
     let name = vd.vd_name.id_str in
     let loc = vd.vd_loc in

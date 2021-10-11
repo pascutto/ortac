@@ -2,28 +2,27 @@ module W = Warnings
 open Ppxlib
 open Gospel
 
-type type_ = {
-  name : string;
-  loc : Location.t;
-  mutable_ : bool;
-  ghost : bool;
-  invariants : expression list;
-  equality : expression;
-  comparison : expression;
-  copy : expression;
-}
-
-type ocaml_var = {
-  name : string;
-  type_ : Ttypes.ty;
-  invariants : expression list;
-}
-
 type term = {
   txt : string;
   loc : Location.t;
   translation : (expression, W.t) result;
 }
+
+type ocaml_var = { name : string; type_ : Ttypes.ty; invariants : term list }
+
+type type_ = {
+  name : string;
+  loc : Location.t;
+  mutable_ : bool;
+  ghost : bool;
+  invariants : term list;
+  equality : (expression, W.t) result;
+  comparison : (expression, W.t) result;
+  copy : (expression, W.t) result;
+}
+
+let type_ ~name ~loc ~mutable_ ~ghost equality comparison copy =
+  { name; loc; mutable_; ghost; invariants = []; equality; comparison; copy }
 
 type xpost = { exn : string; translation : (cases, W.t list) result }
 
