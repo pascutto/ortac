@@ -25,7 +25,7 @@ let rec pattern pn =
 type bound = Inf of expression | Sup of expression
 
 let rec bounds ~driver ~loc (var : Tterm.vsymbol) (t1 : Tterm.term)
-    (t2 : Tterm.term) : expression * expression =
+    (t2 : Tterm.term) =
   let unsupported () =
     raise (W.Error (Unsupported "ill formed quantification", loc))
   in
@@ -72,7 +72,7 @@ and unsafe_term ~driver (t : Tterm.term) : expression =
       in
       eapply f args
   | Tapp (ls, tlist) -> (
-      Drv.translate driver ls |> function
+      Drv.translate_stdlib ls driver |> function
       | Some f -> eapply (evar f) (List.map term tlist)
       | None ->
           let func = ls.ls_name.id_str in
@@ -213,12 +213,6 @@ let rec xpost_pattern ~driver exn = function
         (noloc (str "%a" Tterm.Ident.pp s.vs_name))
   | pn -> ppat_construct (lident exn) (Some (pattern pn))
 
-module M = Map.Make (struct
-  type t = Ttypes.xsymbol
-
-  let compare = compare
-end)
-
 let assert_false_case =
   case ~guard:None ~lhs:[%pat? _] ~rhs:[%expr assert false]
 
@@ -258,6 +252,14 @@ let with_xposts ~driver ~term_printer xposts (value : value) =
   in
   { value with xpostconditions }
 
+let function_definition ~driver t =
+  let txt = Fmt.str "%a" Tterm.print_term t in
+  let loc = Option.value ~default:Location.none t.t_loc in
+  let translation =
+    try Ok (unsafe_term ~driver t) with W.Error t -> Error t
+  in
+  { txt; loc; translation }
+
 let axiom_definition ~driver ~register_name t =
   let register_name = evar register_name in
   let fail_violated = F.violated_axiom ~register_name in
@@ -270,46 +272,5 @@ let axiom_definition ~driver ~register_name t =
            [%expr
              if not [%e check] then [%e fail_violated];
              [%e F.report ~register_name]])
-  in
-  { txt; loc; translation }
-
-let returned_pattern rets =
-  let to_string x = str "%a" Tast.Ident.pp x.Tterm.vs_name in
-  let pvars, evars =
-    List.filter_map
-      (function
-        | Tast.Lunit -> Some (punit, eunit)
-        | Tast.Lnone x ->
-            let s = to_string x in
-            Some (pvar s, evar s)
-        | Tast.Lghost _ -> None
-        | Tast.Loptional _ | Tast.Lnamed _ -> assert false)
-      rets
-    |> List.split
-  in
-  (ppat_tuple pvars, pexp_tuple evars)
-
-let mk_setup loc fun_name =
-  let loc_name = gen_symbol ~prefix:"__loc" () in
-  let let_loc next =
-    [%expr
-      let [%p pvar loc_name] = [%e elocation loc] in
-      [%e next]]
-  in
-  let register_name = gen_symbol ~prefix:"__acc" () in
-  let let_acc next =
-    [%expr
-      let [%p pvar register_name] =
-        Ortac_runtime.Errors.create [%e evar loc_name] [%e estring fun_name]
-      in
-      [%e next]]
-  in
-  ((fun next -> let_loc @@ let_acc @@ next), register_name)
-
-let function_definition ~driver t =
-  let txt = Fmt.str "%a" Tterm.print_term t in
-  let loc = Option.value ~default:Location.none t.t_loc in
-  let translation =
-    try Ok (unsafe_term ~driver t) with W.Error t -> Error t
   in
   { txt; loc; translation }

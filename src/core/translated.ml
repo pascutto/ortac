@@ -84,4 +84,10 @@ type axiom = {
 
 type function_ = { name : string; loc : Location.t; definition : term option }
 
-type predicate = { name : string; loc : Location.t; definition : term option }
+type structure_item =
+  | Type of type_
+  | Value of value
+  | Constant of constant
+  | Function of function_
+  | Predicate of function_
+  | Axiom of axiom

@@ -2,11 +2,9 @@ module W = Warnings
 open Ppxlib
 open Gospel
 open Translated
+module T = Translation
 
 module Make (B : Frontend.S) = struct
-  open Builder
-  module T = Translation
-
   let register_name = gen_symbol ~prefix:"__error"
 
   let term_printer text global_loc (t : Tterm.term) =
@@ -41,12 +39,17 @@ module Make (B : Frontend.S) = struct
       let mutable_ = type_.mutable_ || spec.ty_ephemeral in
       let type_ =
         type_
-        |> T.with_models ~driver spec.ty_fields
-        |> T.with_invariants ~driver spec.ty_invariants
+        (* |> T.with_models ~driver spec.ty_fields *)
+        (* |> T.with_invariants ~driver ~term_printer spec.ty_invariants *)
       in
       { type_ with mutable_ }
     in
-    Option.fold ~none:type_ ~some:(process ~type_) td.td_spec
+    let type_ = Option.fold ~none:type_ ~some:(process ~type_) td.td_spec in
+    let type_item = Type type_ in
+    driver |> Drv.add_translation type_item |> Drv.add_type td.td_ts type_
+
+  let types ~driver ~ghost =
+    List.fold_left (fun driver -> type_ ~driver ~ghost) driver
 
   let value ~driver ~ghost (vd : Tast.val_description) =
     let name = vd.vd_name.id_str in
@@ -68,7 +71,15 @@ module Make (B : Frontend.S) = struct
       in
       { value with pure = spec.sp_pure }
     in
-    Option.fold ~none:value ~some:(process ~value) vd.vd_spec
+    let value = Option.fold ~none:value ~some:(process ~value) vd.vd_spec in
+    let value_item = Value value in
+    let driver =
+      if value.pure then
+        let ls = Drv.get_ls driver [ name ] in
+        Drv.add_function ls name driver
+      else driver
+    in
+    Drv.add_translation value_item driver
 
   let constant ~driver ~ghost (vd : Tast.val_description) =
     let name = vd.vd_name.id_str in
@@ -83,20 +94,29 @@ module Make (B : Frontend.S) = struct
       let term_printer = term_printer spec.sp_text spec.sp_loc in
       constant |> T.with_constant_checks ~driver ~term_printer spec.sp_post
     in
-    Option.fold ~none:constant ~some:(process ~constant) vd.vd_spec
+    let c = Option.fold ~none:constant ~some:(process ~constant) vd.vd_spec in
+    Drv.add_translation (Constant c) driver
 
-  let function_ ~driver (func : Tast.function_) : Translated.function_ =
+  let function_ ~driver (func : Tast.function_) =
     let name = func.fun_ls.ls_name.id_str in
     let loc = func.fun_loc in
     let definition = Option.map (T.function_definition ~driver) func.fun_def in
-    { name; loc; definition }
+    let function_ = Function { name; loc; definition } in
+    driver |> Drv.add_translation function_ |> Drv.add_function func.fun_ls name
+
+  let predicate ~driver (func : Tast.function_) =
+    let name = func.fun_ls.ls_name.id_str in
+    let loc = func.fun_loc in
+    let definition = Option.map (T.function_definition ~driver) func.fun_def in
+    let predicate = Predicate { name; loc; definition } in
+    driver |> Drv.add_translation predicate |> Drv.add_function func.fun_ls name
 
   let axiom ~driver (ax : Tast.axiom) =
     let name = ax.ax_name.id_str in
     let loc = ax.ax_loc in
     let register_name = register_name () in
     let definition = T.axiom_definition ~driver ~register_name ax.ax_term in
-    { name; loc; register_name; definition }
+    Drv.add_translation (Axiom { name; loc; register_name; definition }) driver
 
   let signature module_name namespace s =
     let driver = Drv.init module_name namespace in
@@ -106,6 +126,8 @@ module Make (B : Frontend.S) = struct
         | Sig_val (vd, ghost) when vd.vd_args <> [] -> value ~driver ~ghost vd
         | Sig_val (vd, ghost) -> constant ~driver ~ghost vd
         | Sig_type (_rec, td, ghost) -> types ~driver ~ghost td
+        | Sig_function func when Option.is_none func.fun_ls.ls_value ->
+            predicate ~driver func
         | Sig_function func -> function_ ~driver func
         | Sig_axiom ax -> axiom ~driver ax
         | _ -> env)

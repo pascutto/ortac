@@ -4,9 +4,7 @@ type t
 
 val init : string -> Tmodule.namespace -> t
 
-val add_translation : t -> Tterm.lsymbol -> string -> unit
-
-val remove_translation : t -> Tterm.lsymbol -> unit
+val add_translation : t -> Tterm.lsymbol -> string -> t
 
 val translate : t -> Tterm.lsymbol -> string option
 

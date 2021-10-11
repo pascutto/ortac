@@ -1,13 +1,5 @@
 module W = Warnings
-open Ppxlib
 open Gospel
-
-val returned_pattern : Tast.lb_arg list -> pattern * expression
-
-val mk_setup : location -> string -> (expression -> expression) * string
-
-val axiom_definition :
-  driver:Drv.t -> register_name:string -> Tterm.term -> Translated.term
 
 val with_pres :
   driver:Drv.t ->
@@ -38,3 +30,6 @@ val with_xposts :
   Translated.value
 
 val function_definition : driver:Drv.t -> Tterm.term -> Translated.term
+
+val axiom_definition :
+  driver:Drv.t -> register_name:string -> Tterm.term -> Translated.term
