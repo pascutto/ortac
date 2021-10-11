@@ -3,6 +3,7 @@ open Ppxlib
 open Gospel
 open Fmt
 open Builder
+open Translated
 module F = Failure
 
 let rec pattern pn =
@@ -155,34 +156,42 @@ and unsafe_term ~driver (t : Tterm.term) : expression =
 
 let term ~driver fail t =
   try
-    Some
+    Ok
       [%expr
         try [%e unsafe_term ~driver t]
         with e ->
           [%e fail (evar "e")];
           true]
-  with W.Error t ->
-    W.register t;
-    None
+  with W.Error t -> Error t
 
 let conditions ~driver ~term_printer fail_violated fail_nonexec terms =
-  List.filter_map
+  List.map
     (fun t ->
-      let s = term_printer t in
-      term ~driver (fail_nonexec s) t
-      |> Option.map (fun t -> [%expr if not [%e t] then [%e fail_violated s]]))
+      let txt = term_printer t in
+      let loc = Option.value ~default:Location.none t.Tterm.t_loc in
+      let translation =
+        term ~driver (fail_nonexec txt) t
+        |> Result.map (fun t ->
+               [%expr if not [%e t] then [%e fail_violated txt]])
+      in
+      { txt; loc; translation })
     terms
-  |> esequence
 
-let post ~driver ~register_name ~term_printer =
-  let fail_violated term = F.violated `Post ~term ~register_name in
-  let fail_nonexec term exn = F.spec_failure `Post ~term ~exn ~register_name in
-  conditions ~driver ~term_printer fail_violated fail_nonexec
+let with_pres ~driver ~term_printer pres (value : value) =
+  let register_name = evar value.register_name in
+  let violated term = F.violated `Pre ~term ~register_name in
+  let nonexec term exn = F.spec_failure `Pre ~term ~exn ~register_name in
+  let preconditions = conditions ~driver ~term_printer violated nonexec pres in
+  { value with preconditions }
 
-let pre ~driver ~register_name ~term_printer =
-  let fail_violated term = F.violated `Pre ~term ~register_name in
-  let fail_nonexec term exn = F.spec_failure `Pre ~term ~exn ~register_name in
-  conditions ~driver ~term_printer fail_violated fail_nonexec
+let with_posts ~driver ~term_printer posts (value : value) =
+  let register_name = evar value.register_name in
+  let violated term = F.violated `Post ~term ~register_name in
+  let nonexec term exn = F.spec_failure `Post ~term ~exn ~register_name in
+  let postconditions =
+    conditions ~driver ~term_printer violated nonexec posts
+  in
+  { value with postconditions }
 
 let rec xpost_pattern ~driver exn = function
   | Tterm.Papp (ls, []) when Tterm.(ls_equal ls (fs_tuple 0)) -> pvar exn
@@ -197,86 +206,65 @@ let rec xpost_pattern ~driver exn = function
         (noloc (str "%a" Tterm.Ident.pp s.vs_name))
   | pn -> ppat_construct (lident exn) (Some (pattern pn))
 
-let xpost_guard ~driver ~register_name ~term_printer xpost call =
-  let module M = Map.Make (struct
-    type t = Ttypes.xsymbol
+module M = Map.Make (struct
+  type t = Ttypes.xsymbol
 
-    let compare = compare
-  end) in
-  let default_cases =
-    [
-      case ~guard:None
-        ~lhs:[%pat? (Stack_overflow | Out_of_memory) as e]
-        ~rhs:[%expr raise e];
-      case ~guard:None
-        ~lhs:[%pat? e]
-        ~rhs:
-          [%expr
-            [%e F.unexpected_exn ~allowed_exn:[] ~exn:(evar "e") ~register_name];
-            [%e F.report ~register_name];
-            raise e];
-    ]
-  in
-  let assert_false_case =
-    case ~guard:None ~lhs:[%pat? _] ~rhs:[%expr assert false]
-  in
-  List.fold_left
-    (fun map (exn, ptlist) ->
-      let name = exn.Ttypes.xs_ident.id_str in
-      let cases =
-        List.filter_map
-          (fun (p, t) ->
-            let s = term_printer t in
-            let fail_nonexec exn =
-              F.spec_failure `XPost ~term:s ~exn ~register_name
-            in
-            term ~driver fail_nonexec t
-            |> Option.map (fun t ->
-                   case ~guard:None
-                     ~lhs:(xpost_pattern ~driver name p.Tterm.p_node)
-                     ~rhs:
-                       [%expr
-                         if not [%e t] then
-                           [%e F.violated `XPost ~term:s ~register_name]]))
-          (* XXX ptlist must be rev because the cases are given in the
-             reverse order by gospel *)
-          (List.rev ptlist)
-        @ [ assert_false_case ]
-      in
-      M.update exn
-        (function None -> Some [ cases ] | Some e -> Some (cases :: e))
-        map)
-    M.empty xpost
-  |> fun cases ->
-  M.fold
-    (fun exn cases acc ->
-      let name = exn.Ttypes.xs_ident.id_str in
-      let has_args = exn.Ttypes.xs_type <> Ttypes.Exn_tuple [] in
-      let alias = gen_symbol ~prefix:"__e" () in
-      let rhs =
-        [%expr
-          [%e List.map (pexp_match (evar alias)) cases |> esequence];
-          [%e F.report ~register_name];
-          raise [%e evar alias]]
-      in
-      let lhs =
-        ppat_alias
-          (ppat_construct (lident name)
-             (if has_args then Some ppat_any else None))
-          (noloc alias)
-      in
-      case ~guard:None ~lhs ~rhs :: acc)
-    cases default_cases
-  |> pexp_try call
+  let compare = compare
+end)
 
-let mk_axiom_body ~driver ~register_name t =
+let assert_false_case =
+  case ~guard:None ~lhs:[%pat? _] ~rhs:[%expr assert false]
+
+let with_xposts ~driver ~term_printer xposts (value : value) =
+  let register_name = evar value.register_name in
+  let xpost (exn, ptlist) =
+    let name = exn.Ttypes.xs_ident.id_str in
+    let cases =
+      List.map
+        (fun (p, t) ->
+          let s = term_printer t in
+          let nonexec exn = F.spec_failure `XPost ~term:s ~exn ~register_name in
+          term ~driver nonexec t
+          |> Result.map (fun t ->
+                 case ~guard:None
+                   ~lhs:(xpost_pattern ~driver name p.Tterm.p_node)
+                   ~rhs:
+                     [%expr
+                       if not [%e t] then
+                         [%e F.violated `XPost ~term:s ~register_name]]))
+        (* XXX ptlist must be rev because the cases are given in the
+           reverse order by gospel *)
+        (List.rev ptlist)
+    in
+    if List.exists Result.is_error cases then
+      List.filter_map (function Ok _ -> None | Error x -> Some x) cases
+      |> Result.error
+    else List.map Result.get_ok cases @ [ assert_false_case ] |> Result.ok
+  in
+  let xpostconditions =
+    List.map
+      (fun xp ->
+        let exn = (fst xp).Ttypes.xs_ident.id_str in
+        let translation = xpost xp in
+        { exn; translation })
+      xposts
+  in
+  { value with xpostconditions }
+
+let axiom_definition ~driver ~register_name t =
+  let register_name = evar register_name in
   let fail_violated = F.violated_axiom ~register_name in
   let fail_nonexec exn = F.axiom_failure ~exn ~register_name in
-  term ~driver fail_nonexec t
-  |> Option.map (fun check ->
-         [%expr
-           if not [%e check] then [%e fail_violated];
-           [%e F.report ~register_name]])
+  let txt = Fmt.str "%a" Tterm.print_term t in
+  let loc = Option.value ~default:Location.none t.t_loc in
+  let translation =
+    term ~driver fail_nonexec t
+    |> Result.map (fun check ->
+           [%expr
+             if not [%e check] then [%e fail_violated];
+             [%e F.report ~register_name]])
+  in
+  { txt; loc; translation }
 
 let returned_pattern rets =
   let to_string x = str "%a" Tast.Ident.pp x.Tterm.vs_name in
@@ -311,28 +299,16 @@ let mk_setup loc fun_name =
   in
   ((fun next -> let_loc @@ let_acc @@ next), register_name)
 
-let mk_pre_checks ~driver ~register_name ~term_printer pres next =
-  [%expr
-    [%e pre ~driver ~register_name ~term_printer pres];
-    [%e F.report ~register_name];
-    [%e next]]
-
-let mk_call ~driver ~register_name ~term_printer ret_pat loc fun_name xpost
-    eargs =
-  let call = pexp_apply (evar fun_name) eargs in
-  let check_raises =
-    xpost_guard ~driver ~register_name ~term_printer xpost call
-  in
-  fun next ->
-    [%expr
-      let [%p ret_pat] = [%e check_raises] in
-      [%e next]]
-
-let mk_post_checks ~driver ~register_name ~term_printer posts next =
-  [%expr
-    [%e post ~driver ~register_name ~term_printer posts];
-    [%e F.report ~register_name];
-    [%e next]]
+(* let mk_call ~driver ~register_name ~term_printer ret_pat loc fun_name xpost *)
+(*     eargs = *)
+(*   let call = pexp_apply (evar fun_name) eargs in *)
+(*   let check_raises = *)
+(*     xpost_guard ~driver ~register_name ~term_printer xpost call *)
+(*   in *)
+(*   fun next -> *)
+(*     [%expr *)
+(*       let [%p ret_pat] = [%e check_raises] in *)
+(*       [%e next]] *)
 
 let mk_function_def ~driver t =
   try Some (unsafe_term ~driver t)
