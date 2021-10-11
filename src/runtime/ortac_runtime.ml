@@ -191,3 +191,9 @@ module List = struct
 
   let mapi f l = List.mapi (fun i -> f (Z.of_int i)) l
 end
+
+module Couples = struct
+  let fst (a, _) = a
+
+  let snd (_, b) = b
+end

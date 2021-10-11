@@ -81,3 +81,9 @@ module List : sig
 
   val mapi : (Z.t -> 'a -> 'b) -> 'a list -> 'b list
 end
+
+module Couples : sig
+  val fst : 'a * 'b -> 'a
+
+  val snd : 'a * 'b -> 'b
+end
