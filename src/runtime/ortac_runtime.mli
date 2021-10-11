@@ -62,6 +62,10 @@ module Array : sig
   val sub : 'a array -> Z.t -> Z.t -> 'a array
 
   val mapi : (Z.t -> 'a -> 'b) -> 'a array -> 'b array
+
+  val permut : 'a array -> 'a array -> bool
+
+  val permut_sub : 'a array -> 'a array -> Z.t -> Z.t -> bool
 end
 
 module List : sig

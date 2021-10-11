@@ -150,6 +150,20 @@ module Array = struct
     Array.sub arr (Z.to_int zs) (Z.to_int zl)
 
   let mapi f arr = Array.mapi (fun i -> f (Z.of_int i)) arr
+
+  let occurrences arr =
+    let (table : ('a, int) Hashtbl.t) = Hashtbl.create 0 in
+    let add a =
+      match Hashtbl.find_opt table a with
+      | None -> Hashtbl.add table a 1
+      | Some n -> Hashtbl.replace table a (n + 1)
+    in
+    Array.iter add arr;
+    table
+
+  let permut a b = occurrences a = occurrences b
+
+  let permut_sub a b lo hi = permut (sub a lo hi) (sub b lo hi)
 end
 
 module List = struct
