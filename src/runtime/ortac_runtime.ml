@@ -151,19 +151,23 @@ module Array = struct
 
   let mapi f arr = Array.mapi (fun i -> f (Z.of_int i)) arr
 
-  let occurrences arr =
+  let occurrences arr lo hi =
     let (table : ('a, int) Hashtbl.t) = Hashtbl.create 0 in
-    let add a =
-      match Hashtbl.find_opt table a with
-      | None -> Hashtbl.add table a 1
-      | Some n -> Hashtbl.replace table a (n + 1)
+    let add i a =
+      if i <= lo || i > hi then ()
+      else
+        match Hashtbl.find_opt table a with
+        | None -> Hashtbl.add table a 1
+        | Some n -> Hashtbl.replace table a (n + 1)
     in
-    Array.iter add arr;
+    Array.iteri add arr;
     table
 
-  let permut a b = occurrences a = occurrences b
+  let permut_sub a b lo hi = occurrences a lo hi = occurrences b lo hi
 
-  let permut_sub a b lo hi = permut (sub a lo hi) (sub b lo hi)
+  let permut a b =
+    if Array.length a <> Array.length b then false
+    else permut_sub a b 0 (Array.length a - 1)
 end
 
 module List = struct
