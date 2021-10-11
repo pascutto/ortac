@@ -193,6 +193,13 @@ let with_posts ~driver ~term_printer posts (value : value) =
   in
   { value with postconditions }
 
+let with_constant_checks ~driver ~term_printer checks (constant : constant) =
+  let register_name = evar constant.register_name in
+  let violated term = F.violated `Pre ~term ~register_name in
+  let nonexec term exn = F.spec_failure `Pre ~term ~exn ~register_name in
+  let checks = conditions ~driver ~term_printer violated nonexec checks in
+  { constant with checks }
+
 let rec xpost_pattern ~driver exn = function
   | Tterm.Papp (ls, []) when Tterm.(ls_equal ls (fs_tuple 0)) -> pvar exn
   | Tterm.Papp (ls, _l) when not (Tterm.is_fs_tuple ls) -> assert false
@@ -299,19 +306,10 @@ let mk_setup loc fun_name =
   in
   ((fun next -> let_loc @@ let_acc @@ next), register_name)
 
-(* let mk_call ~driver ~register_name ~term_printer ret_pat loc fun_name xpost *)
-(*     eargs = *)
-(*   let call = pexp_apply (evar fun_name) eargs in *)
-(*   let check_raises = *)
-(*     xpost_guard ~driver ~register_name ~term_printer xpost call *)
-(*   in *)
-(*   fun next -> *)
-(*     [%expr *)
-(*       let [%p ret_pat] = [%e check_raises] in *)
-(*       [%e next]] *)
-
-let mk_function_def ~driver t =
-  try Some (unsafe_term ~driver t)
-  with W.Error t ->
-    W.register t;
-    None
+let function_definition ~driver t =
+  let txt = Fmt.str "%a" Tterm.print_term t in
+  let loc = Option.value ~default:Location.none t.t_loc in
+  let translation =
+    try Ok (unsafe_term ~driver t) with W.Error t -> Error t
+  in
+  { txt; loc; translation }

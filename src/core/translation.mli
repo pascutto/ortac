@@ -23,6 +23,13 @@ val with_posts :
   Translated.value ->
   Translated.value
 
+val with_constant_checks :
+  driver:Drv.t ->
+  term_printer:(Tterm.term -> string) ->
+  Tterm.term list ->
+  Translated.constant ->
+  Translated.constant
+
 val with_xposts :
   driver:Drv.t ->
   term_printer:(Tterm.term -> string) ->
@@ -30,16 +37,4 @@ val with_xposts :
   Translated.value ->
   Translated.value
 
-(* val mk_call : *)
-(*   driver:Drv.t -> *)
-(*   register_name:expression -> *)
-(*   term_printer:(Tterm.term -> string) -> *)
-(*   pattern -> *)
-(*   location -> *)
-(*   label -> *)
-(*   (Ttypes.xsymbol * (Tterm.pattern * Tterm.term) list) list -> *)
-(*   (arg_label * expression) list -> *)
-(*   expression -> *)
-(*   expression *)
-
-val mk_function_def : driver:Drv.t -> Tterm.term -> expression option
+val function_definition : driver:Drv.t -> Tterm.term -> Translated.term

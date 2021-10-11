@@ -6,6 +6,7 @@ type type_ = {
   name : string;
   loc : Location.t;
   mutable_ : bool;
+  ghost : bool;
   invariants : expression list;
   equality : expression;
   comparison : expression;
@@ -32,36 +33,39 @@ type value = {
   arguments : ocaml_var list;
   returns : ocaml_var list;
   register_name : string;
+  ghost : bool;
   pure : bool;
   preconditions : term list;
   postconditions : term list;
   xpostconditions : xpost list;
 }
 
-type constant = {
-  name : string;
-  loc : Location.t;
-  type_ : Ttypes.ty;
-  register_name : string;
-  checks : term list;
-  invariants : expression list;
-}
-
-let constant ~name ~loc ~type_ ~register_name =
-  { name; loc; type_; register_name; checks = []; invariants = [] }
-
-let value ~name ~loc ~arguments ~returns ~register_name ~pure =
+let value ~name ~loc ~arguments ~returns ~register_name ~ghost ~pure =
   {
     name;
     loc;
     arguments;
     returns;
     register_name;
+    ghost;
     pure;
     preconditions = [];
     postconditions = [];
     xpostconditions = [];
   }
+
+type constant = {
+  name : string;
+  loc : Location.t;
+  type_ : Ttypes.ty;
+  register_name : string;
+  ghost : bool;
+  checks : term list;
+  invariants : expression list;
+}
+
+let constant ~name ~loc ~type_ ~register_name ~ghost =
+  { name; loc; type_; register_name; ghost; checks = []; invariants = [] }
 
 type axiom = {
   name : string;
@@ -69,3 +73,7 @@ type axiom = {
   register_name : string;
   definition : term;
 }
+
+type function_ = { name : string; loc : Location.t; definition : term option }
+
+type predicate = { name : string; loc : Location.t; definition : term option }

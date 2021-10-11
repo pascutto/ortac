@@ -1,21 +1,23 @@
 open Gospel
 module H = Hashtbl.Make (Tterm.LS)
 
-type t = { translations : string H.t; env : Tmodule.namespace list }
+type t = {
+  module_name : string;
+  translations : string H.t;
+  env : Tmodule.namespace;
+}
 
-let get_env get env path =
-  List.find_map (fun ns -> try Some (get ns path) with Not_found -> None) env
-  |> function
-  | Some s -> s
-  | None ->
-      Fmt.(
-        failwith "Internal error: path `%a' was not found"
-          (list ~sep:(any ".") string)
-          path)
+let get_env get ns path =
+  try get ns path
+  with Not_found ->
+    Fmt.(
+      failwith "Internal error: path `%a' was not found"
+        (list ~sep:(any ".") string)
+        path)
 
 let get_ls_env = get_env Tmodule.ns_find_ls
 
-let v env =
+let init module_name env =
   let table =
     [
       ([ "None" ], "None");
@@ -53,7 +55,7 @@ let v env =
       let ls = get_ls_env env path in
       H.add translations ls ocaml)
     table;
-  { translations; env }
+  { module_name; translations; env }
 
 let translate t ls = H.find_opt t.translations ls
 

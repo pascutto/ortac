@@ -2,7 +2,7 @@ open Gospel
 
 type t
 
-val v : Gospel.Tmodule.namespace list -> t
+val init : string -> Tmodule.namespace -> t
 
 val add_translation : t -> Tterm.lsymbol -> string -> unit
 
