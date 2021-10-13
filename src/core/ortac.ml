@@ -43,8 +43,7 @@ module Make (B : Frontend.S) = struct
       (* let term_printer = Fmt.str "%a" Tterm.print_term in *)
       let mutable_ = type_.mutable_ || spec.ty_ephemeral in
       let type_ =
-        type_
-        (* |> T.with_models ~driver spec.ty_fields *)
+        type_ |> T.with_models ~driver spec.ty_fields
         (* |> T.with_invariants ~driver ~term_printer spec.ty_invariants *)
       in
       { type_ with mutable_ }

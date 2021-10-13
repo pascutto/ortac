@@ -15,6 +15,7 @@ type type_ = {
   loc : Location.t;
   mutable_ : bool;
   ghost : bool;
+  models : (string * bool) list;
   invariants : term list;
   equality : (expression, W.t) result;
   comparison : (expression, W.t) result;
@@ -27,6 +28,7 @@ let type_ ~name ~loc ~mutable_ ~ghost =
     loc;
     mutable_;
     ghost;
+    models = [];
     invariants = [];
     equality = Error (W.Unsupported "equality", loc);
     comparison = Error (W.Unsupported "comparison", loc);
