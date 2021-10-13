@@ -32,7 +32,12 @@ module Make (B : Frontend.S) = struct
   let type_ ~driver ~ghost (td : Tast.type_declaration) =
     let name = td.td_ts.ts_ident.id_str in
     let loc = td.td_loc in
-    let mutable_ = assert false (* infer if the type is mutable or not *) in
+    let mutable_ =
+      match td.td_spec with
+      | None -> false (* default *)
+      | Some spec ->
+          spec.ty_ephemeral || List.exists (fun (_, b) -> b) spec.ty_fields
+    in
     let type_ = type_ ~name ~loc ~mutable_ ~ghost in
     let process ~type_ (spec : Tast.type_spec) =
       (* let term_printer = Fmt.str "%a" Tterm.print_term in *)
