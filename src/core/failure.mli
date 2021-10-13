@@ -1,7 +1,7 @@
 open Ppxlib
 
 val violated :
-  [ `Post | `Pre | `XPost ] ->
+  [ `Post | `Pre | `XPost | `Invariant ] ->
   term:string ->
   register_name:expression ->
   expression
@@ -11,7 +11,7 @@ val violated_axiom : register_name:expression -> expression
 val axiom_failure : exn:expression -> register_name:expression -> expression
 
 val spec_failure :
-  [ `Post | `Pre | `XPost ] ->
+  [ `Post | `Pre | `XPost | `Invariant ] ->
   term:string ->
   exn:expression ->
   register_name:expression ->

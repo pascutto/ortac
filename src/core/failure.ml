@@ -4,7 +4,11 @@ open Builder
 let eterm t = estring t
 
 let term_kind kind =
-  (match kind with `Pre -> "Pre" | `Post -> "Post" | `XPost -> "XPost")
+  (match kind with
+  | `Pre -> "Pre"
+  | `Post -> "Post"
+  | `XPost -> "XPost"
+  | `Invariant -> "Invariant")
   |> lident
   |> fun c -> pexp_construct c None
 

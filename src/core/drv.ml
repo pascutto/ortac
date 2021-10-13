@@ -27,6 +27,8 @@ let add_translation i t = { t with translations = i :: t.translations }
 
 let add_type ts i t = { t with types = T.add ts i t.types }
 
+let get_type ts t = T.find_opt ts t.types
+
 let add_function ls i t = { t with functions = L.add ls i t.functions }
 
 let get_ls t = get_ls_env t.env

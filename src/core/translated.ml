@@ -8,11 +8,17 @@ type term = {
   translation : (expression, W.t) result;
 }
 
-type ocaml_var = { name : string; type_ : Ttypes.ty; invariants : term list }
+type ocaml_var = {
+  name : string;
+  lb_arg : Tast.lb_arg;
+  type_ : Ttypes.ty;
+  invariants : term list;
+}
 
 type type_ = {
   name : string;
   loc : Location.t;
+  register_name : string;
   mutable_ : bool;
   ghost : bool;
   models : (string * bool) list;
@@ -22,10 +28,11 @@ type type_ = {
   copy : (expression, W.t) result;
 }
 
-let type_ ~name ~loc ~mutable_ ~ghost =
+let type_ ~name ~loc ~register_name ~mutable_ ~ghost =
   {
     name;
     loc;
+    register_name;
     mutable_;
     ghost;
     models = [];

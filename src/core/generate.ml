@@ -29,10 +29,12 @@ let setup name loc register_name next =
 let value
     {
       name;
+      loc;
       arguments;
       returns;
       register_name;
       ghost;
+      pure;
       preconditions;
       postconditions;
       xpostconditions;
