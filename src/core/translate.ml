@@ -17,12 +17,17 @@ let term_printer text global_loc (t : Tterm.term) =
       with Invalid_argument _ -> Fmt.str "%a" Tterm.print_term t)
 
 let var_of_arg ~driver arg =
-  let name =
+  let vsname (vs : Tterm.vsymbol) = Fmt.str "%a" Tast.Ident.pp vs.vs_name in
+  let label, name =
     match arg with
-    | Tast.Lunit -> "()"
-    | _ ->
-        let vs = Tast.vs_of_lb_arg arg in
-        Fmt.str "%a" Tast.Ident.pp vs.vs_name
+    | Tast.Lunit -> (Nolabel, "()")
+    | Tast.Lnone vs | Tast.Lghost vs -> (Nolabel, vsname vs)
+    | Tast.Loptional vs ->
+        let name = vsname vs in
+        (Optional name, name)
+    | Tast.Lnamed vs ->
+        let name = vsname vs in
+        (Optional name, name)
   in
   (* that may be puzzling to call type_ a value of type ty (and not type_ *)
   let type_ = Tast.ty_of_lb_arg arg in
@@ -34,7 +39,7 @@ let var_of_arg ~driver arg =
         | None -> []
         | Some (type_ : Translated.type_) -> type_.invariants)
   in
-  { name; lb_arg = arg; type_; invariants }
+  { name; label; type_; invariants }
 
 let type_ ~driver ~ghost (td : Tast.type_declaration) =
   let name = td.td_ts.ts_ident.id_str in

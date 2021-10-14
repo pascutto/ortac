@@ -10,7 +10,7 @@ type term = {
 
 type ocaml_var = {
   name : string;
-  lb_arg : Tast.lb_arg;
+  label : arg_label;
   type_ : Ttypes.ty;
   invariants : term list;
 }

@@ -50,7 +50,9 @@ let value
   (* in *)
   (* Option.map process val_desc.vd_spec *)
   let eargs, pargs =
-    List.map (fun (var : ocaml_var) -> (evar var.name, pvar var.name)) arguments
+    List.map
+      (fun (var : ocaml_var) -> ((var.label, evar var.name), pvar var.name))
+      arguments
     |> List.split
   in
   let pres =
