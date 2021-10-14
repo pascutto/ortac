@@ -40,3 +40,5 @@ let efun args expr =
     args expr
 
 let lident s = noloc (lident s)
+
+let eunit_seq l = List.fold_right pexp_sequence l eunit
