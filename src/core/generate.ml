@@ -56,8 +56,12 @@ let value
       arguments
     |> List.split
   in
-  (* XXX FIXME: compute real return pattern XXX *)
-  let return = pvar (List.hd returns).name in
+  let return =
+    match returns with
+    | [] -> punit (* not sure about that *)
+    | [ x ] -> pvar x.name
+    | _ -> ppat_tuple (List.map (fun (x : ocaml_var) -> pvar x.name) returns)
+  in
   let pres =
     List.filter_map
       (fun (t : term) -> Result.to_option t.translation)
