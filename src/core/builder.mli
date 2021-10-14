@@ -15,3 +15,5 @@ val elocation : location -> expression
 val efun : (arg_label * pattern) list -> expression -> expression
 
 val lident : label -> longident loc
+
+val eunit_seq : expression list -> expression

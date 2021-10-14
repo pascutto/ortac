@@ -8,25 +8,34 @@ type term = {
   translation : (expression, W.t) result;
 }
 
-type ocaml_var = { name : string; type_ : Ttypes.ty; invariants : term list }
+type ocaml_var = {
+  name : string;
+  label : arg_label;
+  type_ : Ttypes.ty;
+  invariants : term list;
+}
 
 type type_ = {
   name : string;
   loc : Location.t;
+  register_name : string;
   mutable_ : bool;
   ghost : bool;
+  models : (string * bool) list;
   invariants : term list;
   equality : (expression, W.t) result;
   comparison : (expression, W.t) result;
   copy : (expression, W.t) result;
 }
 
-let type_ ~name ~loc ~mutable_ ~ghost =
+let type_ ~name ~loc ~register_name ~mutable_ ~ghost =
   {
     name;
     loc;
+    register_name;
     mutable_;
     ghost;
+    models = [];
     invariants = [];
     equality = Error (W.Unsupported "equality", loc);
     comparison = Error (W.Unsupported "comparison", loc);

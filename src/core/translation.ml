@@ -177,6 +177,21 @@ let conditions ~driver ~term_printer fail_violated fail_nonexec terms =
       { txt; loc; translation })
     terms
 
+let with_models ~driver:_ fields (type_ : type_) =
+  let models =
+    List.map (fun ((ls : Tterm.lsymbol), b) -> (ls.ls_name.id_str, b)) fields
+  in
+  { type_ with models }
+
+let with_invariants ~driver ~term_printer invariants (type_ : type_) =
+  let register_name = evar type_.register_name in
+  let violated term = F.violated `Invariant ~term ~register_name in
+  let nonexec term exn = F.spec_failure `Invariant ~term ~exn ~register_name in
+  let invariants =
+    conditions ~driver ~term_printer violated nonexec invariants
+  in
+  { type_ with invariants }
+
 let with_pres ~driver ~term_printer pres (value : value) =
   let register_name = evar value.register_name in
   let violated term = F.violated `Pre ~term ~register_name in

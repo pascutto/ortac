@@ -16,30 +16,49 @@ let term_printer text global_loc (t : Tterm.term) =
           (loc.loc_end.pos_cnum - loc.loc_start.pos_cnum)
       with Invalid_argument _ -> Fmt.str "%a" Tterm.print_term t)
 
-let var_of_arg ~driver:_ arg =
-  let name =
+let var_of_arg ~driver arg =
+  let vsname (vs : Tterm.vsymbol) = Fmt.str "%a" Tast.Ident.pp vs.vs_name in
+  let label, name =
     match arg with
-    | Tast.Lunit -> "()"
-    | _ ->
-        let vs = Tast.vs_of_lb_arg arg in
-        Fmt.str "%a" Tast.Ident.pp vs.vs_name
+    | Tast.Lunit -> (Nolabel, "()")
+    | Tast.Lnone vs | Tast.Lghost vs -> (Nolabel, vsname vs)
+    | Tast.Loptional vs ->
+        let name = vsname vs in
+        (Optional name, name)
+    | Tast.Lnamed vs ->
+        let name = vsname vs in
+        (Optional name, name)
   in
+  (* that may be puzzling to call type_ a value of type ty (and not type_ *)
   let type_ = Tast.ty_of_lb_arg arg in
-  let invariants = assert false (* use the driver to find invariants *) in
-  { name; type_; invariants }
+  let invariants =
+    match type_.ty_node with
+    | Tyvar _ -> []
+    | Tyapp (ts, _) -> (
+        match Drv.get_type ts driver with
+        | None -> []
+        | Some (type_ : Translated.type_) -> type_.invariants)
+  in
+  { name; label; type_; invariants }
 
 let type_ ~driver ~ghost (td : Tast.type_declaration) =
   let name = td.td_ts.ts_ident.id_str in
   let loc = td.td_loc in
-  let mutable_ = assert false (* infer if the type is mutable or not *) in
-  let type_ = type_ ~name ~loc ~mutable_ ~ghost in
+  let register_name = register_name () in
+  let mutable_ =
+    match td.td_spec with
+    | None -> false (* default *)
+    | Some spec ->
+        spec.ty_ephemeral || List.exists (fun (_, b) -> b) spec.ty_fields
+  in
+  let type_ = type_ ~name ~loc ~register_name ~mutable_ ~ghost in
   let process ~type_ (spec : Tast.type_spec) =
-    (* let term_printer = Fmt.str "%a" Tterm.print_term in *)
+    let term_printer = Fmt.str "%a" Tterm.print_term in
     let mutable_ = type_.mutable_ || spec.ty_ephemeral in
     let type_ =
       type_
-      (* |> T.with_models ~driver spec.ty_fields *)
-      (* |> T.with_invariants ~driver ~term_printer spec.ty_invariants *)
+      |> T.with_models ~driver spec.ty_fields
+      |> T.with_invariants ~driver ~term_printer spec.ty_invariants
     in
     { type_ with mutable_ }
   in

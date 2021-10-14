@@ -8,6 +8,19 @@ val with_pres :
   Translated.value ->
   Translated.value
 
+val with_models :
+  driver:Drv.t ->
+  (Tterm.lsymbol * bool) list ->
+  Translated.type_ ->
+  Translated.type_
+
+val with_invariants :
+  driver:Drv.t ->
+  term_printer:(Gospel.Tterm.term -> string) ->
+  Gospel.Tterm.term list ->
+  Translated.type_ ->
+  Translated.type_
+
 val with_posts :
   driver:Drv.t ->
   term_printer:(Tterm.term -> string) ->
