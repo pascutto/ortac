@@ -55,6 +55,7 @@ module Make (B : Frontend.S) = struct
         |> T.with_pres ~driver ~term_printer spec.sp_pre
         |> T.with_posts ~driver ~term_printer spec.sp_post
         |> T.with_xposts ~driver ~term_printer spec.sp_xpost
+        |> T.with_consumes spec.sp_cs
       in
       { value with pure = spec.sp_pure }
     in

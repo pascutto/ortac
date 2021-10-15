@@ -87,7 +87,7 @@ let value ~driver (value : Translated.value) =
         |> fun (e, p) -> (pexp_tuple e, ppat_tuple p)
   in
   let setup = setup value.name value.loc value.register_name in
-  let invariants =
+  let invariants_pre =
     sequence_conditions
       (List.concat_map
          (fun (a : Translated.ocaml_var) -> a.invariants)
@@ -98,6 +98,13 @@ let value ~driver (value : Translated.value) =
   let call = pexp_apply (evar call_name) eargs in
   let try_call = pexp_try call (group_xpost value) in
   let posts = sequence_conditions value.postconditions in
+  let invariants_post =
+    sequence_conditions
+      (List.concat_map
+         (fun (a : Translated.ocaml_var) ->
+           if a.consumed then [] else a.invariants)
+         value.arguments)
+  in
   let ret_invariants =
     sequence_conditions
       (List.concat_map
@@ -107,11 +114,11 @@ let value ~driver (value : Translated.value) =
   let body =
     setup
     @@ pres
-    @@ invariants
+    @@ invariants_pre
     @@ report
     @@ pexp_let Nonrecursive [ value_binding ~pat:pret ~expr:try_call ]
     @@ posts
-    @@ invariants (* XXX TODO: handle modified and remove consumed *)
+    @@ invariants_post (* XXX TODO: handle modified *)
     @@ ret_invariants
     @@ report
     @@ eret

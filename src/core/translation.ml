@@ -196,6 +196,23 @@ let with_invariants ~driver:_ ~term_printer:_ _invariants (_type_ : type_) =
   (* { type_ with invariants } *)
   assert false
 
+let with_consumes consumes (value : value) =
+  let name (t : Tterm.term) =
+    match t.t_node with
+    | Tterm.Tvar vs -> Some (Fmt.str "%a" Tast.Ident.pp vs.vs_name)
+    | _ -> None
+  in
+  let consumes = List.filter_map name consumes in
+  let arguments =
+    List.map (* not very efficient *)
+      (fun (a : Translated.ocaml_var) ->
+        if List.exists (fun c -> a.name = c) consumes then
+          { a with consumed = true }
+        else a)
+      value.arguments
+  in
+  { value with arguments }
+
 let with_pres ~driver ~term_printer pres (value : value) =
   let register_name = evar value.register_name in
   let violated term = F.violated `Pre ~term ~register_name in

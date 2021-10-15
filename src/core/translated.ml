@@ -13,6 +13,7 @@ type ocaml_var = {
   label : arg_label;
   ty : Ttypes.ty;
   invariants : term list;
+  consumed : bool;
 }
 
 type type_ = {
