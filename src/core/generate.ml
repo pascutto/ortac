@@ -57,6 +57,16 @@ let group_xpost (value : Translated.value) =
       case ~guard:None ~lhs ~rhs :: acc)
     s default_cases
 
+let sequence_conditions terms next =
+  List.fold_left
+    (fun acc (t : Translated.term) ->
+      match t.translation with
+      | Error e ->
+          W.register e;
+          acc
+      | Ok c -> pexp_sequence c acc)
+    next terms
+
 let value ~driver (value : Translated.value) =
   let register_name = evar value.register_name in
   let report = pexp_sequence (F.report ~register_name) in
@@ -77,42 +87,17 @@ let value ~driver (value : Translated.value) =
         |> fun (e, p) -> (pexp_tuple e, ppat_tuple p)
   in
   let setup = setup value.name value.loc value.register_name in
-  let invariants next =
-    List.fold_left
-      (fun acc (t : Translated.term) ->
-        match t.translation with
-        | Error e ->
-            W.register e;
-            acc
-        | Ok c -> pexp_sequence c acc)
-      next
+  let invariants =
+    sequence_conditions
       (List.concat_map
          (fun (a : Translated.ocaml_var) -> a.invariants)
          value.arguments)
   in
-  let pres next =
-    List.fold_left
-      (fun acc (t : Translated.term) ->
-        match t.translation with
-        | Error e ->
-            W.register e;
-            acc
-        | Ok c -> pexp_sequence c acc)
-      next value.preconditions
-  in
+  let pres = sequence_conditions value.preconditions in
   let call_name = Fmt.str "%s.%s" (Drv.module_name driver) value.name in
   let call = pexp_apply (evar call_name) eargs in
   let try_call = pexp_try call (group_xpost value) in
-  let posts next =
-    List.fold_left
-      (fun acc (t : Translated.term) ->
-        match t.translation with
-        | Error e ->
-            W.register e;
-            acc
-        | Ok c -> pexp_sequence c acc)
-      next value.postconditions
-  in
+  let posts = sequence_conditions value.postconditions in
   let body =
     setup
     @@ pres
