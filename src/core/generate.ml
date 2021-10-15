@@ -98,6 +98,12 @@ let value ~driver (value : Translated.value) =
   let call = pexp_apply (evar call_name) eargs in
   let try_call = pexp_try call (group_xpost value) in
   let posts = sequence_conditions value.postconditions in
+  let ret_invariants =
+    sequence_conditions
+      (List.concat_map
+         (fun (a : Translated.ocaml_var) -> a.invariants)
+         value.returns)
+  in
   let body =
     setup
     @@ pres
@@ -105,7 +111,8 @@ let value ~driver (value : Translated.value) =
     @@ report
     @@ pexp_let Nonrecursive [ value_binding ~pat:pret ~expr:try_call ]
     @@ posts
-    @@ invariants
+    @@ invariants (* XXX TODO: handle modified and remove consumed *)
+    @@ ret_invariants
     @@ report
     @@ eret
   in
