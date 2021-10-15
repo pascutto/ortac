@@ -77,6 +77,19 @@ let value ~driver (value : Translated.value) =
         |> fun (e, p) -> (pexp_tuple e, ppat_tuple p)
   in
   let setup = setup value.name value.loc value.register_name in
+  let invariants next =
+    List.fold_left
+      (fun acc (t : Translated.term) ->
+        match t.translation with
+        | Error e ->
+            W.register e;
+            acc
+        | Ok c -> pexp_sequence c acc)
+      next
+      (List.concat_map
+         (fun (a : Translated.ocaml_var) -> a.invariants)
+         value.arguments)
+  in
   let pres next =
     List.fold_left
       (fun acc (t : Translated.term) ->
@@ -103,9 +116,11 @@ let value ~driver (value : Translated.value) =
   let body =
     setup
     @@ pres
+    @@ invariants
     @@ report
     @@ pexp_let Nonrecursive [ value_binding ~pat:pret ~expr:try_call ]
     @@ posts
+    @@ invariants
     @@ report
     @@ eret
   in
