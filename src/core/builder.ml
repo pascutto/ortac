@@ -5,9 +5,7 @@ include Ast_builder.Make (struct
 end)
 
 let noloc txt = { txt; loc = Location.none }
-
 let epred e = eapply (evar "Ortac_runtime.Z.pred") [ e ]
-
 let esucc e = eapply (evar "Ortac_runtime.Z.succ") [ e ]
 
 let econst = function
@@ -40,5 +38,3 @@ let efun args expr =
     args expr
 
 let lident s = noloc (lident s)
-
-let eunit_seq l = List.fold_right pexp_sequence l eunit

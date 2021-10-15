@@ -27,31 +27,29 @@ let var_of_arg ~driver arg =
         (Optional name, name)
     | Tast.Lnamed vs ->
         let name = vsname vs in
-        (Optional name, name)
+        (Labelled name, name)
   in
-  (* that may be puzzling to call type_ a value of type ty (and not type_ *)
-  let type_ = Tast.ty_of_lb_arg arg in
+  let ty = Tast.ty_of_lb_arg arg in
   let invariants =
-    match type_.ty_node with
+    match ty.ty_node with
     | Tyvar _ -> []
     | Tyapp (ts, _) -> (
         match Drv.get_type ts driver with
         | None -> []
         | Some (type_ : Translated.type_) -> type_.invariants)
   in
-  { name; label; type_; invariants }
+  { name; label; ty; invariants }
 
 let type_ ~driver ~ghost (td : Tast.type_declaration) =
   let name = td.td_ts.ts_ident.id_str in
   let loc = td.td_loc in
-  let register_name = register_name () in
   let mutable_ =
     match td.td_spec with
     | None -> false (* default *)
     | Some spec ->
         spec.ty_ephemeral || List.exists (fun (_, b) -> b) spec.ty_fields
   in
-  let type_ = type_ ~name ~loc ~register_name ~mutable_ ~ghost in
+  let type_ = type_ ~name ~loc ~mutable_ ~ghost in
   let process ~type_ (spec : Tast.type_spec) =
     let term_printer = Fmt.str "%a" Tterm.print_term in
     let mutable_ = type_.mutable_ || spec.ty_ephemeral in

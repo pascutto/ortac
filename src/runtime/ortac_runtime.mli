@@ -1,5 +1,4 @@
 type location = { start : Lexing.position; stop : Lexing.position }
-
 type term_kind = Pre | Post | XPost
 
 type error =
@@ -50,10 +49,7 @@ end
 
 module Array : sig
   val make : Z.t -> 'a -> 'a array
-
   val get : 'a array -> Z.t -> 'a
-
   val length : 'a array -> Z.t
-
   val for_all : ('a -> bool) -> 'a array -> bool
 end

@@ -1,7 +1,6 @@
 open Fmt
 
 type location = { start : Lexing.position; stop : Lexing.position }
-
 type term_kind = Pre | Post | XPost
 
 type error =
@@ -14,7 +13,6 @@ type error =
   | Unexpected_checks of { terms : string list }
 
 let styled_list l pp = List.fold_left (fun acc x -> styled x acc) pp l
-
 let quoted pp ppf = pf ppf "`%a'" pp
 
 let pp_term_kind =
@@ -26,7 +24,6 @@ let pp_term_kind =
     (styled `Yellow string)
 
 let pp_term = quoted (styled `Bold string)
-
 let pp_terms = list ~sep:(any "@\n") pp_term
 
 let pp_loc =
@@ -39,11 +36,8 @@ let pp_loc =
   styled_list [ `Underline; `Bold ] unstyled
 
 let pp_fun_name = quoted (styled `Blue string)
-
 let pp_quoted_exn = quoted (styled `Bold string)
-
 let pp_exn = using Printexc.to_string pp_quoted_exn
-
 let pp_allowed_exn = list ~sep:comma pp_quoted_exn
 
 let pp_error ppf = function
@@ -108,7 +102,6 @@ module Errors = struct
   type t = error_report
 
   let create loc fun_name = { loc; fun_name; errors = [] }
-
   let register t e = t.errors <- e :: t.errors
 
   let report t =
@@ -144,6 +137,5 @@ module Array = struct
     else Array.unsafe_get arr (Z.to_int z)
 
   let length arr = Array.length arr |> Z.of_int
-
   let for_all = Array.for_all
 end

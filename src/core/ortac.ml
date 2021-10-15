@@ -17,29 +17,11 @@ module Make (B : Frontend.S) = struct
             (loc.loc_end.pos_cnum - loc.loc_start.pos_cnum)
         with Invalid_argument _ -> Fmt.str "%a" Tterm.print_term t)
 
-  let var_of_arg ~driver:_ arg =
-    let name =
-      match arg with
-      | Tast.Lunit -> "()"
-      | _ ->
-          let vs = Tast.vs_of_lb_arg arg in
-          Fmt.str "%a" Tast.Ident.pp vs.vs_name
-    in
-    let type_ = Tast.ty_of_lb_arg arg in
-    let invariants = assert false (* use the driver to find invariants *) in
-    { name; type_; invariants }
-
   let type_ ~driver ~ghost (td : Tast.type_declaration) =
     let name = td.td_ts.ts_ident.id_str in
     let loc = td.td_loc in
-    let register_name = register_name () in
-    let mutable_ =
-      match td.td_spec with
-      | None -> false (* default *)
-      | Some spec ->
-          spec.ty_ephemeral || List.exists (fun (_, b) -> b) spec.ty_fields
-    in
-    let type_ = type_ ~name ~loc ~register_name ~mutable_ ~ghost in
+    let mutable_ = true (* FIXME infer using type definition or spec *) in
+    let type_ = type_ ~name ~loc ~mutable_ ~ghost in
     let process ~type_ (spec : Tast.type_spec) =
       (* let term_printer = Fmt.str "%a" Tterm.print_term in *)
       let mutable_ = type_.mutable_ || spec.ty_ephemeral in
@@ -60,8 +42,8 @@ module Make (B : Frontend.S) = struct
     let name = vd.vd_name.id_str in
     let loc = vd.vd_loc in
     let register_name = register_name () in
-    let arguments = List.map (var_of_arg ~driver) vd.vd_args in
-    let returns = List.map (var_of_arg ~driver) vd.vd_ret in
+    let arguments = List.map (Translate.var_of_arg ~driver) vd.vd_args in
+    let returns = List.map (Translate.var_of_arg ~driver) vd.vd_ret in
     let pure = false in
     let value =
       value ~name ~loc ~register_name ~arguments ~returns ~pure ~ghost
@@ -126,7 +108,7 @@ module Make (B : Frontend.S) = struct
   let signature module_name namespace s =
     let driver = Drv.init module_name namespace in
     List.fold_left
-      (fun env (sig_item : Tast.signature_item) ->
+      (fun driver (sig_item : Tast.signature_item) ->
         match sig_item.sig_desc with
         | Sig_val (vd, ghost) when vd.vd_args <> [] -> value ~driver ~ghost vd
         | Sig_val (vd, ghost) -> constant ~driver ~ghost vd
@@ -135,6 +117,7 @@ module Make (B : Frontend.S) = struct
             predicate ~driver func
         | Sig_function func -> function_ ~driver func
         | Sig_axiom ax -> axiom ~driver ax
-        | _ -> env)
+        | _ -> driver)
       driver s
+    |> Generate.structure
 end

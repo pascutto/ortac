@@ -1,9 +1,7 @@
 open Ppxlib
 
 type level = Warning | Error
-
 type kind = Unsupported of string
-
 type t = kind * Location.t
 
 let level = function Unsupported _ -> Warning
@@ -11,7 +9,6 @@ let level = function Unsupported _ -> Warning
 exception Error of t
 
 let w = ref []
-
 let register t = w := t :: !w
 
 open Fmt

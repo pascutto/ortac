@@ -20,19 +20,14 @@ let get_env get ns path =
         path)
 
 let get_ls_env = get_env ns_find_ls
-
 let translate_stdlib ls t = L.find_opt ls t.stdlib
-
 let add_translation i t = { t with translations = i :: t.translations }
-
 let add_type ts i t = { t with types = T.add ts i t.types }
-
 let get_type ts t = T.find_opt ts t.types
-
 let add_function ls i t = { t with functions = L.add ls i t.functions }
-
+let find_function ls t = L.find ls t.functions
+let is_function ls t = L.mem ls t.functions
 let get_ls t = get_ls_env t.env
-
 let get_ts t = get_env ns_find_ts t.env
 
 let stdlib =
@@ -82,3 +77,6 @@ let init module_name env =
     types = T.empty;
     functions = L.empty;
   }
+
+let map_translation ~f t = List.map f t.translations
+let module_name t = t.module_name

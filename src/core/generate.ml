@@ -1,23 +1,10 @@
 module W = Warnings
 open Ppxlib
 open Builder
-open Gospel
 open Translated
+module F = Failure
 module T = Translation
-
-let value ~name ~loc ~arguments ~returns ~register_name ~ghost ~pure =
-  {
-    name;
-    loc;
-    arguments;
-    returns;
-    register_name;
-    ghost;
-    pure;
-    preconditions = [];
-    postconditions = [];
-    xpostconditions = [];
-  }
+module M = Map.Make (String)
 
 let setup name loc register_name next =
   [%expr
@@ -26,69 +13,107 @@ let setup name loc register_name next =
     in
     [%e next]]
 
-let value
-    {
-      name;
-      loc;
-      arguments;
-      returns;
-      register_name;
-      ghost = _;
-      pure = _;
-      preconditions;
-      postconditions;
-      xpostconditions;
-    } =
-  (*   let body = *)
-  (*     efun pargs @@ setup_expr @@ pre_checks @@ let_call @@ post_checks *)
-  (*     @@ ret_expr *)
-  (*   in *)
-  (*   (if spec.sp_pure then *)
-  (*    let ls = Drv.get_ls driver [ val_desc.vd_name.id_str ] in *)
-  (*    Drv.add_translation driver ls val_desc.vd_name.id_str); *)
-  (*   [%stri let [%p pvar val_desc.vd_name.id_str] = [%e body]] *)
-  (* in *)
-  (* Option.map process val_desc.vd_spec *)
+let group_xpost (value : Translated.value) =
+  let register_name = evar value.register_name in
+  let default_cases =
+    [
+      case ~guard:None
+        ~lhs:[%pat? (Stack_overflow | Out_of_memory) as e]
+        ~rhs:[%expr raise e];
+      case ~guard:None
+        ~lhs:[%pat? e]
+        ~rhs:
+          [%expr
+            [%e F.unexpected_exn ~allowed_exn:[] ~exn:(evar "e") ~register_name];
+            [%e F.report ~register_name];
+            raise e];
+    ]
+  in
+  let tbl = Hashtbl.create 0 in
+  let rec aux keys = function
+    | [] -> keys
+    | { exn; args; translation = Ok translation } :: t ->
+        Hashtbl.add tbl exn translation;
+        aux (M.add exn args keys) t
+    | _ :: t -> aux keys t
+  in
+  aux M.empty value.xpostconditions |> fun s ->
+  M.fold
+    (fun exn args acc ->
+      let e = gen_symbol ~prefix:"__e_" () in
+      let lhs =
+        ppat_alias
+          (ppat_construct (lident exn)
+             (if args = 0 then None else Some ppat_any))
+          (noloc e)
+      in
+      let matches =
+        Hashtbl.find_all tbl exn |> List.map (pexp_match (evar e)) |> esequence
+      in
+      let rhs =
+        esequence
+          [ matches; F.report ~register_name; eapply (evar "raise") [ evar e ] ]
+      in
+      case ~guard:None ~lhs ~rhs :: acc)
+    s default_cases
+
+let value ~driver (value : Translated.value) =
+  let register_name = evar value.register_name in
+  let report = pexp_sequence (F.report ~register_name) in
   let eargs, pargs =
     List.map
       (fun (var : ocaml_var) ->
         ((var.label, evar var.name), (var.label, pvar var.name)))
-      arguments
+      value.arguments
     |> List.split
   in
-  let return =
-    match returns with
-    | [] -> punit (* not sure about that *)
-    | [ x ] -> pvar x.name
-    | _ -> ppat_tuple (List.map (fun (x : ocaml_var) -> pvar x.name) returns)
+  let eret, pret =
+    match value.returns with
+    | [] -> (eunit, punit)
+    | [ x ] -> (evar x.name, pvar x.name)
+    | ret ->
+        List.map (fun (x : ocaml_var) -> (evar x.name, pvar x.name)) ret
+        |> List.split
+        |> fun (e, p) -> (pexp_tuple e, ppat_tuple p)
   in
-  let pres =
-    List.filter_map
-      (fun (t : term) -> Result.to_option t.translation)
-      preconditions
-    |> eunit_seq
+  let setup = setup value.name value.loc value.register_name in
+  let pres next =
+    List.fold_left
+      (fun acc (t : Translated.term) ->
+        match t.translation with
+        | Error e ->
+            W.register e;
+            acc
+        | Ok c -> pexp_sequence c acc)
+      next value.preconditions
   in
-  let xposts =
-    List.filter_map
-      (fun (t : xpost) -> Result.to_option t.translation)
-      xpostconditions
+  let call_name = Fmt.str "%s.%s" (Drv.module_name driver) value.name in
+  let call = pexp_apply (evar call_name) eargs in
+  let try_call = pexp_try call (group_xpost value) in
+  let posts next =
+    List.fold_left
+      (fun acc (t : Translated.term) ->
+        match t.translation with
+        | Error e ->
+            W.register e;
+            acc
+        | Ok c -> pexp_sequence c acc)
+      next value.postconditions
   in
-  let call = pexp_apply (evar name) eargs in
-  (* XXX FIXME: pattern match on exceptions XXX *)
-  let try_call = pexp_try call (List.hd xposts) in
-  let posts =
-    List.filter_map
-      (fun (t : term) -> Result.to_option t.translation)
-      postconditions
-    |> eunit_seq
-  in
-  let setup = setup name loc register_name in
   let body =
-    pexp_sequence (setup @@ pres)
-      ((fun next ->
-         [%expr
-           let [%p return] = [%e try_call] in
-           [%e next]])
-      @@ posts)
+    setup
+    @@ pres
+    @@ report
+    @@ pexp_let Nonrecursive [ value_binding ~pat:pret ~expr:try_call ]
+    @@ posts
+    @@ report
+    @@ eret
   in
-  [%stri let [%p pvar name] = [%e efun pargs body]]
+  [ [%stri let [%p pvar value.name] = [%e efun pargs body]] ]
+
+let structure driver : structure =
+  (pmod_ident (lident (Drv.module_name driver)) |> include_infos |> pstr_include)
+  :: (Drv.map_translation driver ~f:(function
+        | Translated.Value v -> value ~driver v
+        | _ -> [])
+     |> List.flatten)

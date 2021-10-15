@@ -64,6 +64,9 @@ and unsafe_term ~driver (t : Tterm.term) : expression =
   | Tapp (fs, []) when Tterm.(ls_equal fs fs_bool_false) -> [%expr false]
   | Tapp (fs, tlist) when Tterm.is_fs_tuple fs ->
       List.map term tlist |> pexp_tuple
+  | Tapp (ls, tlist) when Drv.is_function ls driver ->
+      let f = Drv.find_function ls driver in
+      eapply (evar f) (List.map term tlist)
   | Tapp (ls, tlist) when Tterm.(ls_equal ls fs_apply) ->
       let f, args =
         match tlist with
@@ -183,14 +186,15 @@ let with_models ~driver:_ fields (type_ : type_) =
   in
   { type_ with models }
 
-let with_invariants ~driver ~term_printer invariants (type_ : type_) =
-  let register_name = evar type_.register_name in
-  let violated term = F.violated `Invariant ~term ~register_name in
-  let nonexec term exn = F.spec_failure `Invariant ~term ~exn ~register_name in
-  let invariants =
-    conditions ~driver ~term_printer violated nonexec invariants
-  in
-  { type_ with invariants }
+let with_invariants ~driver:_ ~term_printer:_ _invariants (_type_ : type_) =
+  (* let register_name = evar type_.register_name in *)
+  (* let violated term = F.violated `Invariant ~term ~register_name in *)
+  (* let nonexec term exn = F.spec_failure `Invariant ~term ~exn ~register_name in *)
+  (* let invariants = *)
+  (*   conditions ~driver ~term_printer violated nonexec invariants *)
+  (* in *)
+  (* { type_ with invariants } *)
+  assert false
 
 let with_pres ~driver ~term_printer pres (value : value) =
   let register_name = evar value.register_name in
@@ -260,9 +264,15 @@ let with_xposts ~driver ~term_printer xposts (value : value) =
   let xpostconditions =
     List.map
       (fun xp ->
-        let exn = (fst xp).Ttypes.xs_ident.id_str in
+        let xs = fst xp in
+        let exn = xs.Ttypes.xs_ident.id_str in
+        let args =
+          match xs.Ttypes.xs_type with
+          | Ttypes.Exn_tuple l -> List.length l
+          | Ttypes.Exn_record _ -> 1
+        in
         let translation = xpost xp in
-        { exn; translation })
+        { exn; args; translation })
       xposts
   in
   { value with xpostconditions }

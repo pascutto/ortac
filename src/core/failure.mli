@@ -7,7 +7,6 @@ val violated :
   expression
 
 val violated_axiom : register_name:expression -> expression
-
 val axiom_failure : exn:expression -> register_name:expression -> expression
 
 val spec_failure :

@@ -3,5 +3,5 @@ module Make (G : Frontend.S) : sig
     string ->
     Gospel.Tmodule.namespace ->
     Gospel.Tast.signature_item list ->
-    Drv.t
+    Ppxlib.structure
 end

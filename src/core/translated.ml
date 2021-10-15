@@ -11,14 +11,13 @@ type term = {
 type ocaml_var = {
   name : string;
   label : arg_label;
-  type_ : Ttypes.ty;
+  ty : Ttypes.ty;
   invariants : term list;
 }
 
 type type_ = {
   name : string;
   loc : Location.t;
-  register_name : string;
   mutable_ : bool;
   ghost : bool;
   models : (string * bool) list;
@@ -28,11 +27,10 @@ type type_ = {
   copy : (expression, W.t) result;
 }
 
-let type_ ~name ~loc ~register_name ~mutable_ ~ghost =
+let type_ ~name ~loc ~mutable_ ~ghost =
   {
     name;
     loc;
-    register_name;
     mutable_;
     ghost;
     models = [];
@@ -42,7 +40,11 @@ let type_ ~name ~loc ~register_name ~mutable_ ~ghost =
     copy = Error (W.Unsupported "copy", loc);
   }
 
-type xpost = { exn : string; translation : (cases, W.t list) result }
+type xpost = {
+  exn : string;
+  args : int;
+  translation : (cases, W.t list) result;
+}
 
 type value = {
   name : string;
