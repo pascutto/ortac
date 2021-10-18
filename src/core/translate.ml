@@ -38,7 +38,7 @@ let var_of_arg ~driver arg =
         | None -> []
         | Some (type_ : Translated.type_) -> type_.invariants)
   in
-  { name; label; ty; invariants; consumed = false }
+  { name; label; ty; invariants; modified = false; consumed = false }
 
 let type_ ~driver ~ghost (td : Tast.type_declaration) =
   let name = td.td_ts.ts_ident.id_str in

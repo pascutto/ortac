@@ -24,6 +24,9 @@ val with_invariants :
 val with_consumes :
   Gospel.Tterm.term list -> Translated.value -> Translated.value
 
+val with_modified :
+  Gospel.Tterm.term list -> Translated.value -> Translated.value
+
 val with_posts :
   driver:Drv.t ->
   term_printer:(Tterm.term -> string) ->
