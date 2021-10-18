@@ -90,7 +90,7 @@ let value ~driver (value : Translated.value) =
   let invariants_pre =
     sequence_conditions
       (List.concat_map
-         (fun (a : Translated.ocaml_var) -> a.invariants)
+         (fun (a : Translated.ocaml_var) -> a.type_.invariants)
          value.arguments)
   in
   let pres = sequence_conditions value.preconditions in
@@ -102,13 +102,13 @@ let value ~driver (value : Translated.value) =
     sequence_conditions
       (List.concat_map
          (fun (a : Translated.ocaml_var) ->
-           if a.consumed then [] else a.invariants)
+           if a.consumed then [] else a.type_.invariants)
          value.arguments)
   in
   let ret_invariants =
     sequence_conditions
       (List.concat_map
-         (fun (a : Translated.ocaml_var) -> a.invariants)
+         (fun (a : Translated.ocaml_var) -> a.type_.invariants)
          value.returns)
   in
   let body =

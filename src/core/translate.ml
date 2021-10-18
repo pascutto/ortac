@@ -16,7 +16,19 @@ let term_printer text global_loc (t : Tterm.term) =
           (loc.loc_end.pos_cnum - loc.loc_start.pos_cnum)
       with Invalid_argument _ -> Fmt.str "%a" Tterm.print_term t)
 
-let var_of_arg ~driver arg =
+let type_of_ty ~driver (ty : Ttypes.ty) =
+  match ty.ty_node with
+  | Tyvar a ->
+      Translated.type_ ~name:a.tv_name.id_str ~loc:a.tv_name.id_loc
+        ~mutable_:false ~ghost:false
+  | Tyapp (ts, _) -> (
+      match Drv.get_type ts driver with
+      | None ->
+          Translated.type_ ~name:ts.ts_ident.id_str ~loc:ts.ts_ident.id_loc
+            ~mutable_:false ~ghost:false
+      | Some (type_ : Translated.type_) -> type_)
+
+let var_of_arg ~driver arg : Translated.ocaml_var =
   let vsname (vs : Tterm.vsymbol) = Fmt.str "%a" Tast.Ident.pp vs.vs_name in
   let label, name =
     match arg with
@@ -29,16 +41,8 @@ let var_of_arg ~driver arg =
         let name = vsname vs in
         (Labelled name, name)
   in
-  let ty = Tast.ty_of_lb_arg arg in
-  let invariants =
-    match ty.ty_node with
-    | Tyvar _ -> []
-    | Tyapp (ts, _) -> (
-        match Drv.get_type ts driver with
-        | None -> []
-        | Some (type_ : Translated.type_) -> type_.invariants)
-  in
-  { name; label; ty; invariants; modified = false; consumed = false }
+  let type_ = type_of_ty ~driver (Tast.ty_of_lb_arg arg) in
+  { name; label; type_; modified = false; consumed = false }
 
 let type_ ~driver ~ghost (td : Tast.type_declaration) =
   let name = td.td_ts.ts_ident.id_str in
@@ -103,7 +107,7 @@ let constant ~driver ~ghost (vd : Tast.val_description) =
   let register_name = register_name () in
   let type_ =
     assert (List.length vd.vd_ret = 1);
-    Tast.ty_of_lb_arg (List.hd vd.vd_ret)
+    type_of_ty ~driver (Tast.ty_of_lb_arg (List.hd vd.vd_ret))
   in
   let constant = constant ~name ~loc ~register_name ~type_ ~ghost in
   let process ~constant (spec : Tast.val_spec) =

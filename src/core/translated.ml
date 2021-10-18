@@ -1,20 +1,10 @@
 module W = Warnings
 open Ppxlib
-open Gospel
 
 type term = {
   txt : string;
   loc : Location.t;
   translation : (expression, W.t) result;
-}
-
-type ocaml_var = {
-  name : string;
-  label : arg_label;
-  ty : Ttypes.ty;
-  invariants : term list;
-  modified : bool;
-  consumed : bool;
 }
 
 type type_ = {
@@ -41,6 +31,14 @@ let type_ ~name ~loc ~mutable_ ~ghost =
     comparison = Error (W.Unsupported "comparison", loc);
     copy = Error (W.Unsupported "copy", loc);
   }
+
+type ocaml_var = {
+  name : string;
+  label : arg_label;
+  type_ : type_;
+  modified : bool;
+  consumed : bool;
+}
 
 type xpost = {
   exn : string;
@@ -78,7 +76,7 @@ let value ~name ~loc ~arguments ~returns ~register_name ~ghost ~pure =
 type constant = {
   name : string;
   loc : Location.t;
-  type_ : Ttypes.ty;
+  type_ : type_;
   register_name : string;
   ghost : bool;
   checks : term list;

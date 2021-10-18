@@ -81,7 +81,7 @@ module Make (B : Frontend.S) = struct
     let register_name = register_name () in
     let type_ =
       assert (List.length vd.vd_ret = 1);
-      Tast.ty_of_lb_arg (List.hd vd.vd_ret)
+      Tast.ty_of_lb_arg (List.hd vd.vd_ret) |> Translate.type_of_ty ~driver
     in
     let constant = constant ~name ~loc ~register_name ~type_ ~ghost in
     let process ~constant (spec : Tast.val_spec) =
