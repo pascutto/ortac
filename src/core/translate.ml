@@ -28,8 +28,15 @@ let type_of_ty ~driver (ty : Ttypes.ty) =
             ~mutable_:false ~ghost:false
       | Some (type_ : Translated.type_) -> type_)
 
+let vsname (vs : Tterm.vsymbol) = Fmt.str "%a" Tast.Ident.pp vs.vs_name
+
+let var_of_vs ~driver (vs : Tterm.vsymbol) : Translated.ocaml_var =
+  let name = vsname vs in
+  let label = Nolabel in
+  let type_ = type_of_ty ~driver vs.vs_ty in
+  { name; label; type_; modified = false; consumed = false }
+
 let var_of_arg ~driver arg : Translated.ocaml_var =
-  let vsname (vs : Tterm.vsymbol) = Fmt.str "%a" Tast.Ident.pp vs.vs_name in
   let label, name =
     match arg with
     | Tast.Lunit -> (Nolabel, "()")
@@ -117,19 +124,22 @@ let constant ~driver ~ghost (vd : Tast.val_description) =
   let c = Option.fold ~none:constant ~some:(process ~constant) vd.vd_spec in
   Drv.add_translation (Constant c) driver
 
-let function_ ~driver (func : Tast.function_) =
+let mk_function (kind : [ `Function | `Predicate ]) ~driver
+    (func : Tast.function_) =
   let name = func.fun_ls.ls_name.id_str in
   let loc = func.fun_loc in
+  let rec_ = func.fun_rec in
+  let arguments = List.map (var_of_vs ~driver) func.fun_params in
   let definition = Option.map (T.function_definition ~driver) func.fun_def in
-  let function_ = Function { name; loc; definition } in
-  driver |> Drv.add_translation function_ |> Drv.add_function func.fun_ls name
+  let translation =
+    match kind with
+    | `Function -> Function { name; loc; rec_; arguments; definition }
+    | `Predicate -> Predicate { name; loc; rec_; arguments; definition }
+  in
+  driver |> Drv.add_translation translation |> Drv.add_function func.fun_ls name
 
-let predicate ~driver (func : Tast.function_) =
-  let name = func.fun_ls.ls_name.id_str in
-  let loc = func.fun_loc in
-  let definition = Option.map (T.function_definition ~driver) func.fun_def in
-  let predicate = Predicate { name; loc; definition } in
-  driver |> Drv.add_translation predicate |> Drv.add_function func.fun_ls name
+let function_ = mk_function `Function
+let predicate = mk_function `Predicate
 
 let axiom ~driver (ax : Tast.axiom) =
   let name = ax.ax_name.id_str in

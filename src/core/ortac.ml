@@ -91,19 +91,23 @@ module Make (B : Frontend.S) = struct
     let c = Option.fold ~none:constant ~some:(process ~constant) vd.vd_spec in
     Drv.add_translation (Constant c) driver
 
-  let function_ ~driver (func : Tast.function_) =
-    let name = func.fun_ls.ls_name.id_str in
-    let loc = func.fun_loc in
-    let definition = Option.map (T.function_definition ~driver) func.fun_def in
-    let function_ = Function { name; loc; definition } in
-    driver |> Drv.add_translation function_ |> Drv.add_function func.fun_ls name
+  let function_ = Translate.function_
 
-  let predicate ~driver (func : Tast.function_) =
-    let name = func.fun_ls.ls_name.id_str in
-    let loc = func.fun_loc in
-    let definition = Option.map (T.function_definition ~driver) func.fun_def in
-    let predicate = Predicate { name; loc; definition } in
-    driver |> Drv.add_translation predicate |> Drv.add_function func.fun_ls name
+  (* let function_ ~driver (func : Tast.function_) = *)
+  (*   let name = func.fun_ls.ls_name.id_str in *)
+  (*   let loc = func.fun_loc in *)
+  (*   let definition = Option.map (T.function_definition ~driver) func.fun_def in *)
+  (*   let function_ = Function { name; loc; definition } in *)
+  (*   driver |> Drv.add_translation function_ |> Drv.add_function func.fun_ls name *)
+
+  let predicate = Translate.predicate
+
+  (* let predicate ~driver (func : Tast.function_) = *)
+  (*   let name = func.fun_ls.ls_name.id_str in *)
+  (*   let loc = func.fun_loc in *)
+  (*   let definition = Option.map (T.function_definition ~driver) func.fun_def in *)
+  (*   let predicate = Predicate { name; loc; definition } in *)
+  (*   driver |> Drv.add_translation predicate |> Drv.add_function func.fun_ls name *)
 
   let axiom ~driver (ax : Tast.axiom) =
     let name = ax.ax_name.id_str in

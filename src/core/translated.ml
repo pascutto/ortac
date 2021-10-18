@@ -93,7 +93,13 @@ type axiom = {
   definition : term;
 }
 
-type function_ = { name : string; loc : Location.t; definition : term option }
+type function_ = {
+  name : string;
+  loc : Location.t;
+  rec_ : bool;
+  arguments : ocaml_var list;
+  definition : term option;
+}
 
 type structure_item =
   | Type of type_
