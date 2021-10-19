@@ -126,11 +126,13 @@ let constant ~driver ~ghost (vd : Tast.val_description) =
 
 let mk_function (kind : [ `Function | `Predicate ]) ~driver
     (func : Tast.function_) =
-  let name = func.fun_ls.ls_name.id_str in
+  let name = Fmt.str "%s" func.fun_ls.ls_name.id_str in
   let loc = func.fun_loc in
   let rec_ = func.fun_rec in
   let arguments = List.map (var_of_vs ~driver) func.fun_params in
-  let definition = Option.map (T.function_definition ~driver) func.fun_def in
+  let definition =
+    Option.map (T.function_definition ~driver func.fun_ls name) func.fun_def
+  in
   let translation =
     match kind with
     | `Function -> Function { name; loc; rec_; arguments; definition }

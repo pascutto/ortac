@@ -48,7 +48,8 @@ val with_xposts :
   Translated.value ->
   Translated.value
 
-val function_definition : driver:Drv.t -> Tterm.term -> Translated.term
+val function_definition :
+  driver:Drv.t -> Tterm.lsymbol -> string -> Tterm.term -> Translated.term
 
 val axiom_definition :
   driver:Drv.t -> register_name:string -> Tterm.term -> Translated.term

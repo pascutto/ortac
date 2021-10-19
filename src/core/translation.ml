@@ -311,11 +311,12 @@ let with_xposts ~driver ~term_printer xposts (value : value) =
   in
   { value with xpostconditions }
 
-let function_definition ~driver t =
+let function_definition ~driver ls i t =
   (* XXX FIXME: return an int when it should return a Z.t XXX *)
   let txt = Fmt.str "%a" Tterm.print_term t in
   let loc = Option.value ~default:Location.none t.t_loc in
   let translation =
+    let driver = Drv.add_function ls i driver in
     try Ok (unsafe_term ~driver t) with W.Error t -> Error t
   in
   { txt; loc; translation }

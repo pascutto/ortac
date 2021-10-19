@@ -125,9 +125,27 @@ let value ~driver (value : Translated.value) =
   in
   [ [%stri let [%p pvar value.name] = [%e efun pargs body]] ]
 
+let function_ ~driver:_ (func : Translated.function_) =
+  match func.definition with
+  | None -> []
+  | Some term -> (
+      match term.translation with
+      | Error _ -> []
+      | Ok def ->
+          let pat = pvar func.name in
+          let rec f = function
+            | [] -> def
+            | arg :: args -> pexp_fun arg.label None (pvar arg.name) (f args)
+          in
+          let rec_flag = if func.rec_ then Recursive else Nonrecursive in
+          let expr = f func.arguments in
+          [ pstr_value rec_flag [ value_binding ~pat ~expr ] ])
+
 let structure driver : structure =
   (pmod_ident (lident (Drv.module_name driver)) |> include_infos |> pstr_include)
   :: (Drv.map_translation driver ~f:(function
         | Translated.Value v -> value ~driver v
+        | Translated.Function f -> function_ ~driver f
         | _ -> [])
-     |> List.flatten)
+     |> List.flatten
+     |> List.rev)
