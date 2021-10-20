@@ -67,85 +67,60 @@ let sequence_conditions terms next =
       | Ok c -> pexp_sequence c acc)
     next terms
 
+let invariants ignore_consumes =
+  List.concat_map (fun (a : Translated.ocaml_var) ->
+      if ignore_consumes && a.consumed then [] else a.type_.invariants)
+
+let args f = List.map (fun a -> (a.label, f a.name))
+
+let rets (returns : ocaml_var list) =
+  match returns with
+  | [] -> (eunit, punit)
+  | [ x ] -> (evar x.name, pvar x.name)
+  | ret ->
+      List.fold_right
+        (fun (x : ocaml_var) (e, p) -> (evar x.name :: e, pvar x.name :: p))
+        ret ([], [])
+      |> fun (e, p) -> (pexp_tuple e, ppat_tuple p)
+
 let value ~driver (value : Translated.value) =
   let register_name = evar value.register_name in
   let report = pexp_sequence (F.report ~register_name) in
-  let eargs, pargs =
-    List.map
-      (fun (var : ocaml_var) ->
-        ((var.label, evar var.name), (var.label, pvar var.name)))
-      value.arguments
-    |> List.split
-  in
-  let eret, pret =
-    match value.returns with
-    | [] -> (eunit, punit)
-    | [ x ] -> (evar x.name, pvar x.name)
-    | ret ->
-        List.map (fun (x : ocaml_var) -> (evar x.name, pvar x.name)) ret
-        |> List.split
-        |> fun (e, p) -> (pexp_tuple e, ppat_tuple p)
-  in
-  let setup = setup value.name value.loc value.register_name in
-  let invariants_pre =
-    sequence_conditions
-      (List.concat_map
-         (fun (a : Translated.ocaml_var) -> a.type_.invariants)
-         value.arguments)
-  in
-  let pres = sequence_conditions value.preconditions in
+  let eargs = args evar value.arguments in
+  let pargs = args pvar value.arguments in
+  let eret, pret = rets value.returns in
   let call_name = Fmt.str "%s.%s" (Drv.module_name driver) value.name in
   let call = pexp_apply (evar call_name) eargs in
   let try_call = pexp_try call (group_xpost value) in
-  let posts = sequence_conditions value.postconditions in
-  let invariants_post =
-    sequence_conditions
-      (List.concat_map
-         (fun (a : Translated.ocaml_var) ->
-           if a.consumed then [] else a.type_.invariants)
-         value.arguments)
-  in
-  let ret_invariants =
-    sequence_conditions
-      (List.concat_map
-         (fun (a : Translated.ocaml_var) -> a.type_.invariants)
-         value.returns)
-  in
   let body =
-    setup
-    @@ pres
-    @@ invariants_pre
+    setup value.name value.loc value.register_name
+    @@ sequence_conditions value.preconditions
+    @@ sequence_conditions (invariants false value.arguments)
     @@ report
     @@ pexp_let Nonrecursive [ value_binding ~pat:pret ~expr:try_call ]
-    @@ posts
-    @@ invariants_post (* XXX TODO: handle modified *)
-    @@ ret_invariants
+    @@ sequence_conditions value.postconditions
+    @@ sequence_conditions (invariants true value.arguments)
+    @@ sequence_conditions (invariants false value.returns)
     @@ report
     @@ eret
   in
   [ [%stri let [%p pvar value.name] = [%e efun pargs body]] ]
 
-let function_ ~driver:_ (func : Translated.function_) =
-  match func.definition with
-  | None -> []
-  | Some term -> (
-      match term.translation with
-      | Error _ -> []
-      | Ok def ->
-          let pat = pvar func.name in
-          let rec f = function
-            | [] -> def
-            | arg :: args -> pexp_fun arg.label None (pvar arg.name) (f args)
-          in
-          let rec_flag = if func.rec_ then Recursive else Nonrecursive in
-          let expr = f func.arguments in
-          [ pstr_value rec_flag [ value_binding ~pat ~expr ] ])
+let function_ ~driver:_ (f : Translated.function_) =
+  match f.definition with
+  | Some { translation = Ok def; _ } ->
+      let pat = pvar f.name in
+      let pargs = args pvar f.arguments in
+      let expr = efun pargs def in
+      let rec_flag = if f.rec_ then Recursive else Nonrecursive in
+      [ pstr_value rec_flag [ value_binding ~pat ~expr ] ]
+  | _ -> []
 
 let structure driver : structure =
   (pmod_ident (lident (Drv.module_name driver)) |> include_infos |> pstr_include)
   :: (Drv.map_translation driver ~f:(function
         | Translated.Value v -> value ~driver v
         | Translated.Function f -> function_ ~driver f
+        | Translated.Predicate f -> function_ ~driver f
         | _ -> [])
-     |> List.flatten
-     |> List.rev)
+     |> List.flatten)

@@ -78,5 +78,5 @@ let init module_name env =
     functions = L.empty;
   }
 
-let map_translation ~f t = List.map f t.translations
+let map_translation ~f t = List.rev_map f t.translations
 let module_name t = t.module_name
