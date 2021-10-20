@@ -21,11 +21,13 @@ let type_of_ty ~driver (ty : Ttypes.ty) =
   | Tyvar a ->
       Translated.type_ ~name:a.tv_name.id_str ~loc:a.tv_name.id_loc
         ~mutable_:false ~ghost:false
-  | Tyapp (ts, _) -> (
+  | Tyapp (ts, _tvs) -> (
+      (* XXX FIXME should look at tvs *)
       match Drv.get_type ts driver with
       | None ->
           Translated.type_ ~name:ts.ts_ident.id_str ~loc:ts.ts_ident.id_loc
             ~mutable_:false ~ghost:false
+          (* XXX FIXME type could be mutable *)
       | Some (type_ : Translated.type_) -> type_)
 
 let vsname (vs : Tterm.vsymbol) = Fmt.str "%a" Tast.Ident.pp vs.vs_name
@@ -54,12 +56,7 @@ let var_of_arg ~driver arg : Translated.ocaml_var =
 let type_ ~driver ~ghost (td : Tast.type_declaration) =
   let name = td.td_ts.ts_ident.id_str in
   let loc = td.td_loc in
-  let mutable_ =
-    match td.td_spec with
-    | None -> false (* default *)
-    | Some spec ->
-        spec.ty_ephemeral || List.exists (fun (_, b) -> b) spec.ty_fields
-  in
+  let mutable_ = false (* XXX FIXME look at the ocaml type *) in
   let type_ = type_ ~name ~loc ~mutable_ ~ghost in
   let process ~type_ (spec : Tast.type_spec) =
     let term_printer = Fmt.str "%a" Tterm.print_term in
@@ -95,6 +92,8 @@ let value ~driver ~ghost (vd : Tast.val_description) =
       |> T.with_pres ~driver ~term_printer spec.sp_pre
       |> T.with_posts ~driver ~term_printer spec.sp_post
       |> T.with_xposts ~driver ~term_printer spec.sp_xpost
+      |> T.with_consumes spec.sp_cs
+      |> T.with_modified spec.sp_wr
     in
     { value with pure = spec.sp_pure }
   in
@@ -124,7 +123,7 @@ let constant ~driver ~ghost (vd : Tast.val_description) =
   let c = Option.fold ~none:constant ~some:(process ~constant) vd.vd_spec in
   Drv.add_translation (Constant c) driver
 
-let mk_function (kind : [ `Function | `Predicate ]) ~driver
+let function_of (kind : [ `Function | `Predicate ]) ~driver
     (func : Tast.function_) =
   let name = Fmt.str "%s" func.fun_ls.ls_name.id_str in
   let loc = func.fun_loc in
@@ -140,8 +139,8 @@ let mk_function (kind : [ `Function | `Predicate ]) ~driver
   in
   driver |> Drv.add_translation translation |> Drv.add_function func.fun_ls name
 
-let function_ = mk_function `Function
-let predicate = mk_function `Predicate
+let function_ = function_of `Function
+let predicate = function_of `Predicate
 
 let axiom ~driver (ax : Tast.axiom) =
   let name = ax.ax_name.id_str in
@@ -150,10 +149,9 @@ let axiom ~driver (ax : Tast.axiom) =
   let definition = T.axiom_definition ~driver ~register_name ax.ax_term in
   Drv.add_translation (Axiom { name; loc; register_name; definition }) driver
 
-let signature module_name namespace s =
-  let driver = Drv.init module_name namespace in
+let signature ~driver s =
   List.fold_left
-    (fun env (sig_item : Tast.signature_item) ->
+    (fun driver (sig_item : Tast.signature_item) ->
       match sig_item.sig_desc with
       | Sig_val (vd, ghost) when vd.vd_args <> [] -> value ~driver ~ghost vd
       | Sig_val (vd, ghost) -> constant ~driver ~ghost vd
@@ -162,5 +160,5 @@ let signature module_name namespace s =
           predicate ~driver func
       | Sig_function func -> function_ ~driver func
       | Sig_axiom ax -> axiom ~driver ax
-      | _ -> env)
+      | _ -> driver)
     driver s
