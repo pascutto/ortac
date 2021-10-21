@@ -57,11 +57,10 @@ let group_xpost (value : Translated.value) =
       case ~guard:None ~lhs ~rhs :: acc)
     s default_cases
 
-let sequence_conditions terms next =
-  List.fold_left
-    (fun acc (t : Translated.term) ->
-      match t.translation with Error _ -> acc | Ok c -> pexp_sequence c acc)
-    next terms
+let term (t : Translated.term) next =
+  match t.translation with Error _ -> next | Ok c -> pexp_sequence c next
+
+let terms terms next = List.fold_left (fun acc t -> term t acc) next terms
 
 let invariants ignore_consumes =
   List.concat_map (fun (a : Translated.ocaml_var) ->
@@ -79,30 +78,29 @@ let rets (returns : ocaml_var list) =
         ret ([], [])
       |> fun (e, p) -> (pexp_tuple e, ppat_tuple p)
 
-let value ~driver (value : Translated.value) =
-  let register_name = evar value.register_name in
+let value (v : Translated.value) =
+  let register_name = evar v.register_name in
   let report = pexp_sequence (F.report ~register_name) in
-  let eargs = args evar value.arguments in
-  let pargs = args pvar value.arguments in
-  let eret, pret = rets value.returns in
-  let call_name = Fmt.str "%s.%s" (Drv.module_name driver) value.name in
-  let call = pexp_apply (evar call_name) eargs in
-  let try_call = pexp_try call (group_xpost value) in
+  let eargs = args evar v.arguments in
+  let pargs = args pvar v.arguments in
+  let eret, pret = rets v.returns in
+  let call = pexp_apply (evar v.name) eargs in
+  let try_call = pexp_try call (group_xpost v) in
   let body =
-    setup value.name value.loc value.register_name
-    @@ sequence_conditions value.preconditions
-    @@ sequence_conditions (invariants false value.arguments)
+    setup v.name v.loc v.register_name
+    @@ terms v.preconditions
+    @@ terms (invariants false v.arguments)
     @@ report
     @@ pexp_let Nonrecursive [ value_binding ~pat:pret ~expr:try_call ]
-    @@ sequence_conditions value.postconditions
-    @@ sequence_conditions (invariants true value.arguments)
-    @@ sequence_conditions (invariants false value.returns)
+    @@ terms v.postconditions
+    @@ terms (invariants true v.arguments)
+    @@ terms (invariants false v.returns)
     @@ report
     @@ eret
   in
-  [ [%stri let [%p pvar value.name] = [%e efun pargs body]] ]
+  [ [%stri let [%p pvar v.name] = [%e efun pargs body]] ]
 
-let function_ ~driver:_ (f : Translated.function_) =
+let function_ (f : Translated.function_) =
   match f.definition with
   | Some { translation = Ok def; _ } ->
       let pat = pvar f.name in
@@ -112,11 +110,37 @@ let function_ ~driver:_ (f : Translated.function_) =
       [ pstr_value rec_flag [ value_binding ~pat ~expr ] ]
   | _ -> []
 
+let constant (c : Translated.constant) =
+  let register_name = evar c.register_name in
+  let report = pexp_sequence (F.report ~register_name) in
+  let body =
+    setup c.name c.loc c.register_name
+    @@ terms c.checks
+    @@ terms c.type_.invariants
+    @@ report
+    @@ evar c.name
+  in
+  [ [%stri let [%p pvar c.name] = [%e body]] ]
+
+let type_ (t : Translated.type_) =
+  ignore t;
+  []
+
+let axiom (a : Translated.axiom) =
+  let register_name = evar a.register_name in
+  let report = pexp_sequence (F.report ~register_name) in
+  let body =
+    setup a.name a.loc a.register_name @@ term a.definition @@ report @@ eunit
+  in
+  [ [%stri let () = [%e body]] ]
+
 let structure driver : structure =
   (pmod_ident (lident (Drv.module_name driver)) |> include_infos |> pstr_include)
   :: (Drv.map_translation driver ~f:(function
-        | Translated.Value v -> value ~driver v
-        | Translated.Function f -> function_ ~driver f
-        | Translated.Predicate f -> function_ ~driver f
-        | _ -> [])
+        | Translated.Value v -> value v
+        | Translated.Function f -> function_ f
+        | Translated.Predicate f -> function_ f
+        | Translated.Constant c -> constant c
+        | Translated.Type t -> type_ t
+        | Translated.Axiom a -> axiom a)
      |> List.flatten)
