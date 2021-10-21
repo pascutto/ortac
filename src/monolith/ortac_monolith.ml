@@ -172,5 +172,4 @@ let generate path output =
   assert (List.length env = 1);
   standalone module_name (List.hd env) sigs
   |> Fmt.pf output "%a@." Ppxlib_ast.Pprintast.structure;
-  W.report ();
-  Ortac_core.Warnings.report ()
+  W.report ()

@@ -79,4 +79,5 @@ let init module_name env =
   }
 
 let map_translation ~f t = List.rev_map f t.translations
+let iter_translation ~f t = List.iter f (List.rev t.translations)
 let module_name t = t.module_name

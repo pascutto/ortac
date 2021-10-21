@@ -60,11 +60,7 @@ let group_xpost (value : Translated.value) =
 let sequence_conditions terms next =
   List.fold_left
     (fun acc (t : Translated.term) ->
-      match t.translation with
-      | Error e ->
-          W.register e;
-          acc
-      | Ok c -> pexp_sequence c acc)
+      match t.translation with Error _ -> acc | Ok c -> pexp_sequence c acc)
     next terms
 
 let invariants ignore_consumes =

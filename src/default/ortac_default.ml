@@ -12,5 +12,4 @@ let generate path output =
   |> fun (env, sigs) ->
   assert (List.length env = 1);
   G.signature module_name (List.hd env) sigs
-  |> Fmt.pf output "%a@." Ppxlib_ast.Pprintast.structure;
-  Ortac_core.Warnings.report ()
+  |> Fmt.pf output "%a@." Ppxlib_ast.Pprintast.structure
