@@ -142,8 +142,9 @@ module Full_report = struct
        the constant value %s:@\n\
        - Checks:@\n\
       \  @[%a@]@\n\
-       - Invariants: XXX TODO XXX" pp_loc constant.loc constant.name
-      report_terms constant.checks
+       - Invariants:@\n\
+      \  @[%a@]" pp_loc constant.loc constant.name report_terms constant.checks
+      report_invariants constant.type_.invariants
 
   let report_constants = list ~sep:(any "@\n") report_constant
 
