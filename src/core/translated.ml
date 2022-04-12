@@ -74,6 +74,7 @@ type value = {
   register_name : string;
   ghost : bool;
   pure : bool;
+  olds : (string * expression) list;
   checks : check list;
   preconditions : term list;
   postconditions : term list;
@@ -89,6 +90,7 @@ let value ~name ~loc ~arguments ~returns ~register_name ~ghost ~pure =
     register_name;
     ghost;
     pure;
+    olds = [];
     checks = [];
     preconditions = [];
     postconditions = [];
