@@ -41,6 +41,8 @@ module type S = sig
 
   type integer
 
+  val copy : 'a -> 'a
+
   module Gospelstdlib : sig
     type 'a sequence
     type 'a bag
