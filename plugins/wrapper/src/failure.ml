@@ -22,7 +22,12 @@ let violated_invariant kind ~term ~register_name =
       { term = [%e eterm term]; position = [%e kind] }]
   |> register ~register_name
 
-let violated kind = violated_invariant (term_kind kind)
+let violated kind  ~term ~register_name =
+  [%expr
+    Ortac_runtime.Violated_condition
+      { term = [%e eterm term]; term_kind = [%e term_kind kind] }]
+  |> register ~register_name
+
 
 let violated_axiom ~register_name =
   register ~register_name [%expr Ortac_runtime.Violated_axiom]
